@@ -1,0 +1,289 @@
+// In local dev, Vite proxies /api to localhost:4000 (see vite.config.js).
+// In production, set VITE_API_BASE_URL to your backend URL.
+const API_ROOT = import.meta.env.VITE_API_BASE_URL || '';
+const BASE = `${API_ROOT}/api`;
+
+async function req(method, path, body) {
+  const token = localStorage.getItem('cd_token');
+  const headers = {};
+  if (body) headers['Content-Type'] = 'application/json';
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(BASE + path, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 401) {
+    localStorage.removeItem('cd_token');
+    localStorage.removeItem('cd_user');
+    if (!window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login';
+    }
+    throw new Error('Session expired, please log in again');
+  }
+
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || res.statusText);
+  return data;
+}
+
+const qs = (params) => {
+  const clean = Object.fromEntries(Object.entries(params || {}).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+  const q = new URLSearchParams(clean).toString();
+  return q ? `?${q}` : '';
+};
+
+// Base path for a module's records: modules with a real physical table
+// (table_name set) use their dedicated REST route (/api/accounts, ...);
+// modules with no table yet (admin-created custom modules) use the generic
+// JSON-backed route from the metadata layer.
+const recordsBase = (module) => (module.table_name ? `/${module.api_name}` : `/records/${module.api_name}`);
+
+export const api = {
+  // auth
+  login: (username, password) => req('POST', '/auth/login', { username, password }),
+  me: () => req('GET', '/auth/me'),
+
+  // leads
+  listLeads: (params) => req('GET', '/leads' + qs(params)),
+  getLead: (id) => req('GET', `/leads/${id}`),
+  createLead: (body) => req('POST', '/leads', body),
+  updateLead: (id, body) => req('PUT', `/leads/${id}`, body),
+  deleteLead: (id) => req('DELETE', `/leads/${id}`),
+  addLeadActivity: (id, body) => req('POST', `/leads/${id}/activities`, body),
+  convertLead: (id, body) => req('POST', `/leads/${id}/convert`, body),
+
+  // payments — generic, linked to an Account/Opportunity/Quotation, or a
+  // one-off payer_name when there's no specific linked record
+  listPayments: (params) => req('GET', '/payments' + qs(params)),
+  getPayment: (id) => req('GET', `/payments/${id}`),
+  createPayment: (body) => req('POST', '/payments', body),
+  updatePayment: (id, body) => req('PUT', `/payments/${id}`, body),
+  deletePayment: (id) => req('DELETE', `/payments/${id}`),
+  receiptUrl: (id, institute) => `${BASE}/payments/${id}/receipt?institute=${institute}`,
+
+  // dashboard
+  dashboard: () => req('GET', '/dashboard'),
+  dashboardCrm: () => req('GET', '/dashboard/crm'),
+
+  // reports
+  reportLeads: (params) => req('GET', '/reports/leads' + qs(params)),
+  reportStudents: (params) => req('GET', '/reports/students' + qs(params)),
+  reportAdmissions: (params) => req('GET', '/reports/admissions' + qs(params)),
+  reportCourseWiseAdmissions: () => req('GET', '/reports/course-wise-admissions'),
+  reportFeeCollection: (params) => req('GET', '/reports/fee-collection' + qs(params)),
+  reportPendingFees: () => req('GET', '/reports/pending-fees'),
+  reportPayments: (params) => req('GET', '/reports/payments' + qs(params)),
+  reportPlacements: (params) => req('GET', '/reports/placements' + qs(params)),
+  reportInterviews: (params) => req('GET', '/reports/interviews' + qs(params)),
+  reportCompanies: () => req('GET', '/reports/companies'),
+  reportRevenue: (params) => req('GET', '/reports/revenue' + qs(params)),
+  reportMonthlyAdmissions: () => req('GET', '/reports/monthly-admissions'),
+  reportMonthlyCollection: () => req('GET', '/reports/monthly-collection'),
+
+  // notifications
+  listNotifications: () => req('GET', '/notifications'),
+  markNotificationRead: (key) => req('POST', `/notifications/${key}/read`),
+  markAllNotificationsRead: () => req('POST', '/notifications/read-all'),
+
+  // roles & users
+  listRoles: () => req('GET', '/roles'),
+  createRole: (body) => req('POST', '/roles', body),
+  updateRolePermissions: (id, permissions) => req('PUT', `/roles/${id}/permissions`, { permissions }),
+  deleteRole: (id) => req('DELETE', `/roles/${id}`),
+
+  listUsers: () => req('GET', '/users'),
+  createUser: (body) => req('POST', '/users', body),
+  updateUser: (id, body) => req('PUT', `/users/${id}`, body),
+  deleteUser: (id) => req('DELETE', `/users/${id}`),
+
+  // settings
+  listReceiptTemplates: () => req('GET', '/settings/receipt-templates'),
+  updateReceiptTemplate: (id, body) => req('PUT', `/settings/receipt-templates/${id}`, body),
+  listMasterOptions: (listType) => req('GET', `/settings/master-options${listType ? `?list_type=${listType}` : ''}`),
+  createMasterOption: (body) => req('POST', '/settings/master-options', body),
+  updateMasterOption: (id, body) => req('PUT', `/settings/master-options/${id}`, body),
+  deleteMasterOption: (id) => req('DELETE', `/settings/master-options/${id}`),
+
+  // AI assistant
+  listConversations: () => req('GET', '/assistant/conversations'),
+  createConversation: () => req('POST', '/assistant/conversations', {}),
+  getConversation: (id) => req('GET', `/assistant/conversations/${id}`),
+  sendAssistantMessage: (id, message) => req('POST', `/assistant/conversations/${id}/message`, { message }),
+  confirmAssistantAction: (id, approve) => req('POST', `/assistant/conversations/${id}/confirm`, { approve }),
+  assistantAuditLog: () => req('GET', '/assistant/audit-log'),
+
+  // dev
+  seedDemoData: () => req('POST', '/dev/seed-demo-data'),
+
+  // WhatsApp integrations
+  waProviderTypes: () => req('GET', '/whatsapp/provider-types'),
+  waListProviders: () => req('GET', '/whatsapp/providers'),
+  waConnectProvider: (body) => req('POST', '/whatsapp/providers', body),
+  waUpdateProvider: (id, body) => req('PUT', `/whatsapp/providers/${id}`, body),
+  waDeleteProvider: (id) => req('DELETE', `/whatsapp/providers/${id}`),
+  waSetDefaultProvider: (id) => req('POST', `/whatsapp/providers/${id}/set-default`),
+  waTestProvider: (id) => req('POST', `/whatsapp/providers/${id}/test`),
+  waSyncTemplates: (id) => req('POST', `/whatsapp/providers/${id}/sync-templates`),
+  waListTemplates: (params) => req('GET', '/whatsapp/templates' + qs(params)),
+  waAuditLog: () => req('GET', '/whatsapp/audit-log'),
+
+  // WhatsApp workflows
+  waListEvents: () => req('GET', '/whatsapp/events'),
+  waListWorkflows: () => req('GET', '/whatsapp/workflows'),
+  waCreateWorkflow: (body) => req('POST', '/whatsapp/workflows', body),
+  waUpdateWorkflow: (id, body) => req('PUT', `/whatsapp/workflows/${id}`, body),
+  waActivateWorkflow: (id) => req('POST', `/whatsapp/workflows/${id}/activate`),
+  waDeactivateWorkflow: (id) => req('POST', `/whatsapp/workflows/${id}/deactivate`),
+  waDeleteWorkflow: (id) => req('DELETE', `/whatsapp/workflows/${id}`),
+  waWorkflowRuns: (id) => req('GET', `/whatsapp/workflows/${id}/runs`),
+  waRunScheduledChecks: () => req('POST', '/whatsapp/workflows/run-scheduled-checks'),
+
+  // WhatsApp campaigns
+  waPreviewRecipients: (body) => req('POST', '/whatsapp/campaigns/preview-recipients', body),
+  waListCampaigns: () => req('GET', '/whatsapp/campaigns'),
+  waCreateCampaign: (body) => req('POST', '/whatsapp/campaigns', body),
+  waGetCampaign: (id) => req('GET', `/whatsapp/campaigns/${id}`),
+  waDeleteCampaign: (id) => req('DELETE', `/whatsapp/campaigns/${id}`),
+  waSendCampaign: (id, body) => req('POST', `/whatsapp/campaigns/${id}/send`, body || {}),
+  waListOptouts: () => req('GET', '/whatsapp/optouts'),
+  waAddOptout: (body) => req('POST', '/whatsapp/optouts', body),
+  waRemoveOptout: (id) => req('DELETE', `/whatsapp/optouts/${id}`),
+
+  // WhatsApp conversations
+  waListConversations: (params) => req('GET', '/whatsapp/conversations' + qs(params)),
+  waGetConversation: (id) => req('GET', `/whatsapp/conversations/${id}`),
+  waMarkConversationRead: (id) => req('POST', `/whatsapp/conversations/${id}/read`),
+  waReplyConversation: (id, text) => req('POST', `/whatsapp/conversations/${id}/reply`, { text }),
+
+  // WhatsApp analytics
+  waAnalytics: (params) => req('GET', '/whatsapp/analytics' + qs(params)),
+  waAnalyticsCampaignOptions: () => req('GET', '/whatsapp/analytics/campaign-options'),
+
+  // Lead source integrations
+  leadSourceTypes: () => req('GET', '/lead-sources/source-types'),
+  listLeadSources: () => req('GET', '/lead-sources/sources'),
+  createLeadSource: (body) => req('POST', '/lead-sources/sources', body),
+  updateLeadSource: (id, body) => req('PUT', `/lead-sources/sources/${id}`, body),
+  regenerateLeadSourceKey: (id) => req('POST', `/lead-sources/sources/${id}/regenerate-key`),
+  deleteLeadSource: (id) => req('DELETE', `/lead-sources/sources/${id}`),
+  leadSourceLogs: (id) => req('GET', `/lead-sources/sources/${id}/logs`),
+  leadSourceEmbedSnippet: (id) => req('GET', `/lead-sources/sources/${id}/embed-snippet`),
+
+  // Facebook OAuth connect flow
+  fbConnectUrl: () => req('GET', '/lead-sources/facebook/connect'),
+  fbConnections: () => req('GET', '/lead-sources/facebook/connections'),
+  fbDeleteConnection: (id) => req('DELETE', `/lead-sources/facebook/connections/${id}`),
+  fbPages: (connectionId) => req('GET', `/lead-sources/facebook/connections/${connectionId}/pages`),
+  fbForms: (connectionId, pageId) => req('GET', `/lead-sources/facebook/connections/${connectionId}/pages/${pageId}/forms`),
+  fbConnectForm: (body) => req('POST', '/lead-sources/facebook/connect-form', body),
+
+  // Universal CRM — module + field metadata
+  listModulesMeta: (includeDisabled) => req('GET', '/modules' + (includeDisabled ? '?include_disabled=1' : '')),
+  getModuleMeta: (apiName) => req('GET', `/modules/${apiName}`),
+  listModuleFields: (moduleId) => req('GET', `/modules/${moduleId}/fields`),
+  createModuleMeta: (body) => req('POST', '/modules', body),
+  updateModuleMeta: (id, body) => req('PUT', `/modules/${id}`, body),
+  deleteModuleMeta: (id) => req('DELETE', `/modules/${id}`),
+  createModuleField: (moduleId, body) => req('POST', `/modules/${moduleId}/fields`, body),
+  updateModuleField: (moduleId, fieldId, body) => req('PUT', `/modules/${moduleId}/fields/${fieldId}`, body),
+  deleteModuleField: (moduleId, fieldId) => req('DELETE', `/modules/${moduleId}/fields/${fieldId}`),
+
+  // Universal CRM — generic record CRUD (works for standard + custom modules)
+  universalList: (module, params) => req('GET', recordsBase(module) + qs(params)),
+  universalGet: (module, id) => req('GET', `${recordsBase(module)}/${id}`),
+  universalCreate: (module, body) => req('POST', recordsBase(module), body),
+  universalUpdate: (module, id, body) => req('PUT', `${recordsBase(module)}/${id}`, body),
+  universalDelete: (module, id) => req('DELETE', `${recordsBase(module)}/${id}`),
+
+  // Custom fields on a STANDARD module's record (EAV values, separate from
+  // the record's real columns) — only meaningful when module.table_name is
+  // set; custom (JSON-backed) modules keep all their fields in record.data
+  // via the universal* methods above instead.
+  getCustomFieldValues: (moduleApiName, recordId) => req('GET', `/records/${moduleApiName}/${recordId}/custom-fields`),
+  saveCustomFieldValues: (moduleApiName, recordId, body) => req('PUT', `/records/${moduleApiName}/${recordId}/custom-fields`, body),
+
+  // Universal CRM — relationships + kanban
+  listRelated: (moduleApiName, recordId) => req('GET', `/relationships/${moduleApiName}/${recordId}`),
+  linkRecords: (body) => req('POST', '/relationships', body),
+  unlinkRecords: (body) => req('DELETE', '/relationships', body),
+  kanban: (moduleApiName) => req('GET', `/${moduleApiName}/kanban`),
+  moveOpportunityStage: (id, stageId) => req('PUT', `/opportunities/${id}/stage`, { stage_id: stageId }),
+
+  // Universal CRM — global search across every enabled module the user can view
+  globalSearch: (q, limit) => req('GET', `/search?q=${encodeURIComponent(q)}${limit ? `&limit=${limit}` : ''}`),
+
+  // Universal CRM — general Workflow Automation engine
+  listWorkflows: () => req('GET', '/workflows'),
+  getWorkflow: (id) => req('GET', `/workflows/${id}`),
+  createWorkflow: (body) => req('POST', '/workflows', body),
+  updateWorkflow: (id, body) => req('PUT', `/workflows/${id}`, body),
+  deleteWorkflow: (id) => req('DELETE', `/workflows/${id}`),
+  getWorkflowRuns: (id) => req('GET', `/workflows/${id}/runs`),
+
+  // Universal CRM — Pipeline Builder
+  // Universal CRM — Pipeline Builder
+  listPipelines: (moduleApiName) => req('GET', '/pipelines' + (moduleApiName ? `?module=${moduleApiName}` : '')),
+  getPipeline: (id) => req('GET', `/pipelines/${id}`),
+  createPipeline: (body) => req('POST', '/pipelines', body),
+  updatePipeline: (id, body) => req('PUT', `/pipelines/${id}`, body),
+  deletePipeline: (id) => req('DELETE', `/pipelines/${id}`),
+
+  // Universal CRM — quotation PDF + send
+  quotationPdfUrl: (id, institute) => `${BASE}/quotations/${id}/pdf?institute=${institute || 'A'}`,
+  sendQuotation: (id, body) => req('POST', `/quotations/${id}/send`, body),
+
+  // Universal CRM — Teams
+  listTeams: () => req('GET', '/teams'),
+  createTeam: (body) => req('POST', '/teams', body),
+  updateTeam: (id, body) => req('PUT', `/teams/${id}`, body),
+  deleteTeam: (id) => req('DELETE', `/teams/${id}`),
+
+  // Universal CRM — Documents
+  listDocuments: (params) => req('GET', '/documents' + qs(params)),
+  createDocumentLink: (body) => req('POST', '/documents', body),
+  deleteDocument: (id) => req('DELETE', `/documents/${id}`),
+  documentDownloadUrl: (id) => `${BASE}/documents/${id}/download`,
+  uploadDocument: async (formData) => {
+    // Multipart — can't go through req(), which sets a JSON content-type.
+    const res = await fetch(`${BASE}/documents`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('cd_token')}` },
+      body: formData,
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Upload failed');
+    return res.json();
+  },
+
+  // Universal CRM — generative AI Actions
+  aiAnalyze: (moduleApiName, id, saveAsNote) => req('POST', `/ai-actions/${moduleApiName}/${id}/analyze`, { save_as_note: !!saveAsNote }),
+  aiSummarize: (moduleApiName, id, createTasks) => req('POST', `/ai-actions/${moduleApiName}/${id}/summarize`, { create_tasks: !!createTasks }),
+  aiAskDashboard: (question) => req('POST', '/ai-actions/dashboard/ask', { question }),
+
+  // Universal CRM — WhatsApp conversation for a specific record (any module)
+  getRecordConversation: (entityType, entityId) => req('GET', `/whatsapp/conversations?entity_type=${entityType}&entity_id=${entityId}`),
+  getConversationDetail: (conversationId) => req('GET', `/whatsapp/conversations/${conversationId}`),
+  replyToConversation: (conversationId, text) => req('POST', `/whatsapp/conversations/${conversationId}/reply`, { text }),
+
+  // Universal CRM — Layout Builder (layoutType: 'create' | 'edit' | 'detail')
+  getModuleLayout: (moduleId, layoutType) => req('GET', `/modules/${moduleId}/layout/${layoutType}`),
+  saveModuleLayout: (moduleId, layoutType, layoutJson) => req('PUT', `/modules/${moduleId}/layout/${layoutType}`, layoutJson),
+
+  // Database backup
+  emailBackupNow: (to) => req('POST', '/backup/email-now', { to }),
+  downloadBackup: async () => {
+    const token = localStorage.getItem('cd_token');
+    const res = await fetch(`${BASE}/backup/download`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) { const data = await res.json().catch(() => null); throw new Error(data?.error || 'Download failed'); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `crm-backup-${new Date().toISOString().slice(0, 10)}.db`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+};
