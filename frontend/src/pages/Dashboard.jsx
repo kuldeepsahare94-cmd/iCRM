@@ -71,13 +71,13 @@ function AskAiWidget() {
   };
 
   return (
-    <div className="bg-white border border-line rounded-xl p-5">
+    <div className="card p-5">
       <h2 className="text-sm font-semibold text-ink mb-1 flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-amber" /> Ask AI</h2>
       <p className="text-xs text-slate-400 mb-3">Grounded in the numbers above — e.g. "which stage has the most stuck deals?"</p>
       <form onSubmit={ask} className="flex gap-2">
         <input value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask a question about the pipeline…"
           className="border border-line rounded-lg px-3 py-2 text-sm flex-1" />
-        <button type="submit" disabled={loading} className="bg-amber text-white text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
+        <button type="submit" disabled={loading} className="btn btn-primary disabled:opacity-50">
           {loading ? '…' : 'Ask'}
         </button>
       </form>
@@ -113,7 +113,7 @@ function CrmDashboardSection({ data }) {
       </div>
 
       <div className="grid md:grid-cols-2 gap-6 mt-8">
-        <div className="bg-white border border-line rounded-xl p-5">
+        <div className="card p-5">
           <h2 className="text-sm font-semibold text-ink mb-1">Opportunities by Stage</h2>
           <p className="text-xs text-slate-400 mb-4">Deal count and value per pipeline stage</p>
           <ResponsiveContainer width="100%" height={220}>
@@ -127,7 +127,7 @@ function CrmDashboardSection({ data }) {
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white border border-line rounded-xl p-5">
+        <div className="card p-5">
           <h2 className="text-sm font-semibold text-ink mb-1">Recurring Revenue</h2>
           <p className="text-xs text-slate-400 mb-4">Subscription payments collected, last 6 months</p>
           <ResponsiveContainer width="100%" height={220}>
@@ -141,7 +141,7 @@ function CrmDashboardSection({ data }) {
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white border border-line rounded-xl p-5">
+        <div className="card p-5">
           <h2 className="text-sm font-semibold text-ink mb-3 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" /> Leads by Source</h2>
           <div className="space-y-3">
             {data.leads_by_source.map((s) => (
@@ -156,7 +156,7 @@ function CrmDashboardSection({ data }) {
 
         <AskAiWidget />
 
-        <div className="bg-white border border-line rounded-xl p-5">
+        <div className="card p-5">
           <h2 className="text-sm font-semibold text-ink mb-3">Recent Activity</h2>
           <div className="space-y-1">
             {data.recent_activities.map((a) => (
@@ -191,7 +191,7 @@ export default function Dashboard() {
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="max-w-[1600px] mx-auto">
       <div className="rounded-2xl p-6 mb-2 text-white relative overflow-hidden"
         style={{ background: 'linear-gradient(135deg, var(--color-ink), var(--color-ink-light))' }}>
         <div className="absolute inset-0 opacity-[0.06]" style={{

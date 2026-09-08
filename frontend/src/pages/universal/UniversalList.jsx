@@ -51,8 +51,8 @@ export default function UniversalList() {
   const statusField = useMemo(() => fields.find((f) => STATUS_TYPES.has(f.api_name)), [fields]);
   const followupField = useMemo(() => findFollowupField(fields), [fields]);
 
-  if (loading) return <div className="p-8 text-slate-400 text-sm">Loading…</div>;
-  if (error) return <div className="p-8 text-warn text-sm">{error}</div>;
+  if (loading) return <div className="py-8 t-meta">Loading…</div>;
+  if (error) return <div className="py-8 text-sm" style={{ color: "var(--color-danger)" }}>{error}</div>;
   if (!module) return null;
 
   const submit = async (e) => {
@@ -77,14 +77,14 @@ export default function UniversalList() {
   }));
 
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="max-w-[1600px] mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${module.color}22`, color: module.color }}>
             <ModuleIcon name={module.icon} className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>{module.plural_label}</h1>
+            <h1 className="t-page-title">{module.plural_label}</h1>
             {module.description && <p className="text-sm text-slate-500 mt-1">{module.description}</p>}
           </div>
         </div>
@@ -96,10 +96,10 @@ export default function UniversalList() {
             </button>
           )}
           {can(module.api_name, 'export') && (
-            <button onClick={exportCsv} className="border border-line text-sm font-medium px-4 py-2 rounded-lg hover:bg-white">Export CSV</button>
+            <button onClick={exportCsv} className="btn btn-secondary">Export CSV</button>
           )}
           {can(module.api_name, 'create') && (
-            <button onClick={() => setShowForm((s) => !s)} className="bg-amber text-white text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90">
+            <button onClick={() => setShowForm((s) => !s)} className="btn btn-primary">
               {showForm ? 'Cancel' : `+ Add ${module.singular_label}`}
             </button>
           )}
@@ -112,7 +112,7 @@ export default function UniversalList() {
       </div>
 
       {showForm && (
-        <form onSubmit={submit} className="bg-white border border-line rounded-xl p-5 mt-5 grid grid-cols-2 gap-4">
+        <form onSubmit={submit} className="card p-5 mt-5 grid grid-cols-2 gap-4">
           {createFields.map((f) => (
             <div key={f.id} className={f.field_type === 'textarea' ? 'col-span-2' : ''}>
               <label className="text-xs text-slate-500 font-medium block mb-1">{f.label}{f.required ? ' *' : ''}</label>
@@ -125,10 +125,10 @@ export default function UniversalList() {
         </form>
       )}
 
-      <div className="bg-white border border-line rounded-xl mt-6 overflow-hidden overflow-x-auto shadow-sm">
+      <div className="card mt-6 overflow-hidden overflow-x-auto shadow-sm">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-500 bg-canvas border-b border-line">
+            <tr className="text-left bg-[var(--color-canvas)] border-b border-line">
               {listFields.map((f) => <th key={f.id} className="py-3 px-4 font-medium">{f.label}</th>)}
               {listFields.length === 0 && <th className="py-3 px-4 font-medium">Record</th>}
               {followupField && <th className="py-3 px-4 font-medium">Follow-up</th>}
@@ -136,7 +136,7 @@ export default function UniversalList() {
           </thead>
           <tbody>
             {records.map((r) => (
-              <tr key={r.id} className="border-b border-line/60 hover:bg-amber-soft/40 transition-colors cursor-pointer"
+              <tr key={r.id} className="border-b border-line/60 hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
                 onClick={() => navigate(`/records/${module.api_name}/${r.id}`)}>
                 {listFields.length > 0 ? listFields.map((f, i) => (
                   <td key={f.id} className="py-3 px-4">

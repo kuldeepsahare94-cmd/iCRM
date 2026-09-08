@@ -73,7 +73,7 @@ function FollowUpPanel({ module, fields, record, showWhatsApp, onGoToWhatsApp, o
   };
 
   return (
-    <div className="bg-white border border-line rounded-xl p-4 mb-5">
+    <div className="card p-4 mb-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         {status && (
           <div className="flex items-center gap-2">
@@ -178,7 +178,7 @@ function DocumentsPanel({ moduleApiName, recordId }) {
   const prettySize = (b) => (b == null ? '' : b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(0)} KB` : `${(b / 1048576).toFixed(1)} MB`);
 
   return (
-    <div className="bg-white border border-line rounded-xl p-4 mb-5">
+    <div className="card p-4 mb-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 text-sm font-medium text-ink">
           <Paperclip className="w-4 h-4 text-amber" /> Documents
@@ -260,7 +260,7 @@ function QuotationActionsPanel({ recordId, record, onUpdated }) {
   };
 
   return (
-    <div className="bg-white border border-line rounded-xl p-4 mb-5">
+    <div className="card p-4 mb-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 text-sm font-medium text-ink">
           <FileText className="w-4 h-4 text-amber" /> Quotation document
@@ -325,7 +325,7 @@ function AiAnalysisPanel({ moduleApiName, recordId }) {
   const riskColor = { low: '#10B981', medium: '#F59E0B', high: '#EF4444' }[result?.risk_level] || '#94A3B8';
 
   return (
-    <div className="bg-white border border-line rounded-xl p-4 mb-5">
+    <div className="card p-4 mb-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 text-sm font-medium text-ink">
           <Sparkles className="w-4 h-4 text-amber" /> AI {isAnalyze ? 'Analysis' : 'Summary'}
@@ -419,7 +419,7 @@ function WhatsAppPanel({ moduleApiName, recordId }) {
 
   if (convo === null) {
     return (
-      <div className="bg-white border border-line rounded-xl mt-5 p-8 text-center">
+      <div className="card mt-5 p-8 text-center">
         <MessageCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
         <p className="text-sm text-slate-500">No WhatsApp conversation yet for this record.</p>
         <p className="text-xs text-slate-400 mt-1">One appears here automatically once this contact messages in, or you can send a template via WhatsApp → Workflows or Campaigns.</p>
@@ -428,7 +428,7 @@ function WhatsAppPanel({ moduleApiName, recordId }) {
   }
 
   return (
-    <div className="bg-white border border-line rounded-xl mt-5 flex flex-col" style={{ maxHeight: 480 }}>
+    <div className="card mt-5 flex flex-col" style={{ maxHeight: 480 }}>
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {convo.messages.map((m) => (
           <div key={m.id} className={`flex ${m.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
@@ -507,8 +507,8 @@ export default function UniversalDetail() {
       .filter(([, v]) => v.length === 0 || typeof v[0] === 'object');
   }, [record]);
 
-  if (loading) return <div className="p-8 text-slate-400 text-sm">Loading…</div>;
-  if (error) return <div className="p-8 text-warn text-sm">{error}</div>;
+  if (loading) return <div className="py-8 t-meta">Loading…</div>;
+  if (error) return <div className="py-8 text-sm" style={{ color: "var(--color-danger)" }}>{error}</div>;
   if (!module || !record) return null;
 
   const startEdit = () => {
@@ -560,14 +560,14 @@ export default function UniversalDetail() {
   const tabs = ['overview', ...embeddedRelations.map(([k]) => k), ...(showWhatsApp ? ['whatsapp'] : []), 'related'];
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="max-w-[1400px] mx-auto">
       <button onClick={() => navigate(`/records/${module.api_name}`)} className="text-slate-500 hover:text-ink text-sm inline-flex items-center gap-1 mb-4">
         <ArrowLeft className="w-4 h-4" /> {module.plural_label}
       </button>
 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>{title}</h1>
+          <h1 className="t-page-title">{title}</h1>
           {statusField && <div className="mt-2"><StatusBadge status={getFieldValue(record, statusField)} /></div>}
         </div>
         <div className="flex gap-2">
@@ -603,7 +603,7 @@ export default function UniversalDetail() {
       </div>
 
       {tab === 'overview' && (
-        <div className="bg-white border border-line rounded-xl p-5 mt-5">
+        <div className="card p-5 mt-5">
           {editing ? (
             <>
               <div className="grid grid-cols-2 gap-4">
@@ -615,10 +615,10 @@ export default function UniversalDetail() {
                 ))}
               </div>
               <div className="flex gap-2 mt-4">
-                <button onClick={save} disabled={saving} className="bg-amber text-white text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
+                <button onClick={save} disabled={saving} className="btn btn-primary disabled:opacity-50">
                   {saving ? 'Saving…' : 'Save changes'}
                 </button>
-                <button onClick={() => setEditing(false)} className="border border-line text-sm font-medium px-4 py-2 rounded-lg hover:bg-canvas">Cancel</button>
+                <button onClick={() => setEditing(false)} className="btn btn-secondary">Cancel</button>
               </div>
             </>
           ) : layout?.sections?.length > 0 ? (
@@ -660,13 +660,13 @@ export default function UniversalDetail() {
       )}
 
       {embeddedRelations.map(([key, rows]) => tab === key && (
-        <div key={key} className="bg-white border border-line rounded-xl mt-5 overflow-hidden overflow-x-auto shadow-sm">
+        <div key={key} className="card mt-5 overflow-hidden overflow-x-auto shadow-sm">
           {rows.length === 0 ? (
             <div className="py-8 text-center text-slate-400 text-sm capitalize">No {key.replace(/_/g, ' ')} yet.</div>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-slate-500 bg-canvas border-b border-line">
+                <tr className="text-left bg-[var(--color-canvas)] border-b border-line">
                   {Object.keys(rows[0]).filter((k) => k !== 'id').slice(0, 6).map((k) => (
                     <th key={k} className="py-3 px-4 font-medium capitalize">{k.replace(/_/g, ' ')}</th>
                   ))}
@@ -689,7 +689,7 @@ export default function UniversalDetail() {
       {tab === 'whatsapp' && showWhatsApp && <WhatsAppPanel moduleApiName={module.api_name} recordId={id} />}
 
       {tab === 'related' && (
-        <div className="bg-white border border-line rounded-xl mt-5 p-5">
+        <div className="card mt-5 p-5">
           {related.length === 0 ? (
             <div className="text-sm text-slate-400">No linked records yet. Use the AI assistant or the relationships API to link records from other modules to this one.</div>
           ) : (

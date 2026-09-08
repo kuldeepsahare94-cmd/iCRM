@@ -23,7 +23,7 @@ function TeamEditor({ team, users, onSave, onCancel, can }) {
   };
 
   return (
-    <div className="bg-white border border-line rounded-xl p-5 space-y-4">
+    <div className="card p-5 space-y-4">
       {error && <div className="text-xs text-warn bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
 
       <div className="grid grid-cols-2 gap-3">
@@ -69,11 +69,11 @@ function TeamEditor({ team, users, onSave, onCancel, can }) {
 
       <div className="flex gap-2 pt-2 border-t border-line">
         {can('teams', t.id ? 'edit' : 'create') && (
-          <button onClick={save} disabled={saving} className="bg-amber text-white text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
+          <button onClick={save} disabled={saving} className="btn btn-primary disabled:opacity-50">
             {saving ? 'Saving…' : 'Save team'}
           </button>
         )}
-        <button onClick={onCancel} className="border border-line text-sm font-medium px-4 py-2 rounded-lg hover:bg-canvas">Cancel</button>
+        <button onClick={onCancel} className="btn btn-secondary">Cancel</button>
       </div>
     </div>
   );
@@ -111,17 +111,17 @@ export default function SettingsTeams() {
     catch (err) { alert(err.message); }
   };
 
-  if (loading) return <div className="p-8 text-slate-400 text-sm">Loading…</div>;
+  if (loading) return <div className="py-8 t-meta">Loading…</div>;
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="max-w-4xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
             <Users2 className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>Teams</h1>
+            <h1 className="t-page-title">Teams</h1>
             <p className="text-sm text-slate-500 mt-1">Group users into teams so records can be assigned to a team, not just an individual.</p>
           </div>
         </div>
@@ -141,7 +141,7 @@ export default function SettingsTeams() {
       {!editing && (
         <div className="space-y-3 mt-6">
           {teams.map((t) => (
-            <div key={t.id} className="bg-white border border-line rounded-xl p-4">
+            <div key={t.id} className="card p-4">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <div className="text-sm font-medium text-ink flex items-center gap-2">
@@ -170,7 +170,7 @@ export default function SettingsTeams() {
             </div>
           ))}
           {teams.length === 0 && (
-            <div className="bg-white border border-line rounded-xl p-8 text-center text-sm text-slate-400">
+            <div className="card p-8 text-center text-sm text-slate-400">
               No teams yet.
             </div>
           )}

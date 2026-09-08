@@ -46,13 +46,13 @@ export default function Reports() {
   const columns = rows.length ? Object.keys(rows[0]).filter((k) => !HIDE_COLS.has(k)) : [];
 
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="max-w-[1600px] mx-auto">
       <div className="flex items-center gap-3 no-print">
         <div className="w-10 h-10 rounded-xl bg-amber-soft text-amber flex items-center justify-center">
           <BarChart3 className="w-5 h-5" />
         </div>
         <div>
-          <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>Reports</h1>
+          <h1 className="t-page-title">Reports</h1>
           <p className="text-sm text-slate-500 mt-1">Every module, searchable and exportable.</p>
         </div>
       </div>
@@ -93,10 +93,10 @@ export default function Reports() {
 
       <h2 className="hidden print:block font-display text-xl font-semibold text-ink mt-6 mb-2">{report.label}</h2>
 
-      <div className="bg-white border border-line rounded-xl mt-4 overflow-hidden overflow-x-auto">
+      <div className="card mt-4 overflow-hidden overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-500 bg-canvas border-b border-line">
+            <tr className="text-left bg-[var(--color-canvas)] border-b border-line">
               {columns.map((c) => (
                 <th key={c} className="py-2.5 px-4 font-medium whitespace-nowrap">{titleCase(c)}</th>
               ))}

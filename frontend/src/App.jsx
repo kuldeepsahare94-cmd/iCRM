@@ -16,6 +16,9 @@ import SettingsModules from './pages/SettingsModules';
 import SettingsWorkflows from './pages/SettingsWorkflows';
 import SettingsPipelines from './pages/SettingsPipelines';
 import SettingsTeams from './pages/SettingsTeams';
+import SettingsData from './pages/SettingsData';
+import SettingsFinance from './pages/SettingsFinance';
+import CallReports from './pages/CallReports';
 import Appearance from './pages/Appearance';
 import WhatsAppIntegrations from './pages/WhatsAppIntegrations';
 import WhatsAppTemplates from './pages/WhatsAppTemplates';
@@ -42,6 +45,7 @@ export default function App() {
               <Route path="/payments" element={<Payments />} />
               <Route path="/payments/:id" element={<Payments />} />
               <Route path="/reports" element={<Reports />} />
+              <Route path="/call-reports" element={<CallReports />} />
               <Route path="/roles" element={<Roles />} />
               <Route path="/users" element={<Users />} />
               <Route path="/settings" element={<Settings />} />
@@ -49,6 +53,8 @@ export default function App() {
               <Route path="/settings/workflows" element={<SettingsWorkflows />} />
               <Route path="/settings/pipelines" element={<SettingsPipelines />} />
               <Route path="/settings/teams" element={<SettingsTeams />} />
+              <Route path="/settings/data" element={<SettingsData />} />
+              <Route path="/settings/finance" element={<SettingsFinance />} />
               <Route path="/appearance" element={<Appearance />} />
               <Route path="/whatsapp" element={<WhatsAppIntegrations />} />
               <Route path="/whatsapp/templates" element={<WhatsAppTemplates />} />

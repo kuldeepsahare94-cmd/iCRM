@@ -61,13 +61,13 @@ export default function Roles() {
   const activeRole = roles.find((r) => r.id === activeRoleId);
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="max-w-[1400px] mx-auto">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-amber-soft text-amber flex items-center justify-center">
           <ShieldCheck className="w-5 h-5" />
         </div>
         <div>
-          <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>Roles &amp; Permissions</h1>
+          <h1 className="t-page-title">Roles &amp; Permissions</h1>
           <p className="text-sm text-slate-500 mt-1">Module-wise View / Create / Edit / Delete / Export access per role.</p>
         </div>
       </div>
@@ -89,10 +89,10 @@ export default function Roles() {
       </div>
 
       {activeRole && (
-        <div className="bg-white border border-line rounded-xl mt-6 overflow-hidden overflow-x-auto">
+        <div className="card mt-6 overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-500 bg-canvas border-b border-line">
+              <tr className="text-left bg-[var(--color-canvas)] border-b border-line">
                 <th className="py-3 px-4 font-medium">Module</th>
                 {ACTIONS.map((a) => <th key={a} className="py-3 px-4 font-medium text-center capitalize">{a}</th>)}
               </tr>

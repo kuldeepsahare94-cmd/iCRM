@@ -12,7 +12,7 @@ const TYPE_ICON_HINT = {
   linkedin_leads: 'Needs LinkedIn Marketing Developer Platform access',
 };
 
-function CreateSourceModal({ sourceTypes, courses, onClose, onCreated }) {
+function CreateSourceModal({ sourceTypes, onClose, onCreated }) {
   const [name, setName] = useState('');
   const [type, setType] = useState(sourceTypes[0]?.type || '');
   const [defaultStatus, setDefaultStatus] = useState('New');
@@ -60,12 +60,6 @@ function CreateSourceModal({ sourceTypes, courses, onClose, onCreated }) {
         <label className="text-xs font-medium text-slate-500 block mb-1">Default counselor (optional)</label>
         <input placeholder="e.g. Ravi" className="border border-line rounded-lg px-3 py-2 text-sm w-full mb-3"
           value={counselor} onChange={(e) => setCounselor(e.target.value)} />
-
-        <label className="text-xs font-medium text-slate-500 block mb-1">Default course (optional, if this form doesn't ask)</label>
-        <select className="border border-line rounded-lg px-3 py-2 text-sm w-full mb-4" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-          <option value="">None</option>
-          {courses.map((c) => <option key={c.id} value={c.id}>{c.course_name}</option>)}
-        </select>
 
         <button type="submit" disabled={saving} className="w-full bg-rose-600 text-white text-sm font-medium py-2 rounded-lg hover:bg-rose-700 disabled:opacity-60">
           {saving ? 'Creating…' : 'Create Source'}
@@ -162,7 +156,7 @@ function SocialConfigModal({ source, onClose, onSaved }) {
   );
 }
 
-function FacebookConnectWizard({ connection, courses, onClose, onConnected }) {
+function FacebookConnectWizard({ connection, onClose, onConnected }) {
   const [step, setStep] = useState(1);
   const [pages, setPages] = useState(null);
   const [pageError, setPageError] = useState('');
@@ -274,12 +268,6 @@ function FacebookConnectWizard({ connection, courses, onClose, onConnected }) {
             <label className="text-xs font-medium text-slate-500 block mb-1">Default counselor (optional)</label>
             <input className="border border-line rounded-lg px-3 py-2 text-sm w-full mb-3" value={counselor} onChange={(e) => setCounselor(e.target.value)} />
 
-            <label className="text-xs font-medium text-slate-500 block mb-1">Default course (optional)</label>
-            <select className="border border-line rounded-lg px-3 py-2 text-sm w-full mb-4" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-              <option value="">None</option>
-              {courses.map((c) => <option key={c.id} value={c.id}>{c.course_name}</option>)}
-            </select>
-
             <button type="submit" disabled={saving} className="w-full bg-blue-600 text-white text-sm font-medium py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60">
               {saving ? 'Connecting…' : 'Connect This Form'}
             </button>
@@ -295,7 +283,6 @@ export default function LeadSources() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sources, setSources] = useState([]);
   const [sourceTypes, setSourceTypes] = useState([]);
-  const [courses, setCourses] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
   const [embedFor, setEmbedFor] = useState(null);
   const [configFor, setConfigFor] = useState(null);
@@ -310,7 +297,6 @@ export default function LeadSources() {
     load();
     loadConnections();
     api.leadSourceTypes().then(setSourceTypes);
-    api.listCourses({ status: 'Active' }).then(setCourses);
   }, []);
 
   // Handle the redirect back from Facebook's OAuth consent screen
@@ -352,14 +338,14 @@ export default function LeadSources() {
   const remove = async (s) => { if (confirm(`Delete "${s.name}"?`)) { await api.deleteLeadSource(s.id); load(); } };
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="max-w-[1400px] mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
             <Radio className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>Lead Sources</h1>
+            <h1 className="t-page-title">Lead Sources</h1>
             <p className="text-sm text-slate-500 mt-1">Website forms, landing pages, and social ad platforms — plugged straight into your Leads pipeline.</p>
           </div>
         </div>
@@ -378,7 +364,7 @@ export default function LeadSources() {
       )}
 
       {can('lead_sources', 'create') && (
-        <div className="bg-white border border-line rounded-xl p-5 mt-6">
+        <div className="card p-5 mt-6">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
@@ -415,7 +401,7 @@ export default function LeadSources() {
 
       <div className="grid md:grid-cols-2 gap-4 mt-6">
         {sources.map((s) => (
-          <div key={s.id} className="bg-white border border-line rounded-xl p-5">
+          <div key={s.id} className="card p-5">
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-ink">{s.name}</h3>
@@ -463,11 +449,11 @@ export default function LeadSources() {
         )}
       </div>
 
-      {showCreate && <CreateSourceModal sourceTypes={sourceTypes} courses={courses} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); }} />}
+      {showCreate && <CreateSourceModal sourceTypes={sourceTypes} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); }} />}
       {embedFor && <EmbedModal source={embedFor} onClose={() => setEmbedFor(null)} />}
       {configFor && <SocialConfigModal source={configFor} onClose={() => setConfigFor(null)} onSaved={() => { setConfigFor(null); load(); }} />}
       {wizardConnection && (
-        <FacebookConnectWizard connection={wizardConnection} courses={courses}
+        <FacebookConnectWizard connection={wizardConnection}
           onClose={() => setWizardConnection(null)}
           onConnected={() => { setWizardConnection(null); load(); setFbToast({ ok: true, message: 'Lead form connected — new submissions will appear as Leads automatically.' }); }} />
       )}

@@ -41,7 +41,7 @@ export default function UniversalKanban() {
     setDragCard(null);
   };
 
-  if (loading) return <div className="p-8 text-slate-400 text-sm">Loading…</div>;
+  if (loading) return <div className="py-8 t-meta">Loading…</div>;
   if (!module) return null;
 
   return (

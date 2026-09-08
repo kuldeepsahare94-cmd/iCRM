@@ -87,7 +87,7 @@ function ModuleList({ modules, selected, onSelect, onChanged, can }) {
   };
 
   return (
-    <div className="bg-white border border-line rounded-xl p-5">
+    <div className="card p-5">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-ink">Modules</h2>
         {can('modules', 'create') && (
@@ -103,11 +103,11 @@ function ModuleList({ modules, selected, onSelect, onChanged, can }) {
             onChange={(e) => setForm({ ...form, api_name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })}
             className="border border-line rounded-lg px-3 py-2 text-sm w-full disabled:bg-canvas disabled:text-slate-400" />
           <input required placeholder="Singular label (e.g. Property)" value={form.singular_label}
-            onChange={(e) => setForm({ ...form, singular_label: e.target.value })} className="border border-line rounded-lg px-3 py-2 text-sm w-full" />
+            onChange={(e) => setForm({ ...form, singular_label: e.target.value })} className="input" />
           <input required placeholder="Plural label (e.g. Properties)" value={form.plural_label}
-            onChange={(e) => setForm({ ...form, plural_label: e.target.value })} className="border border-line rounded-lg px-3 py-2 text-sm w-full" />
+            onChange={(e) => setForm({ ...form, plural_label: e.target.value })} className="input" />
           <input placeholder="Sidebar group (e.g. Operations)" value={form.sidebar_group}
-            onChange={(e) => setForm({ ...form, sidebar_group: e.target.value })} className="border border-line rounded-lg px-3 py-2 text-sm w-full" />
+            onChange={(e) => setForm({ ...form, sidebar_group: e.target.value })} className="input" />
           <div className="flex items-center gap-3">
             <input type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} className="w-9 h-9 rounded border border-line" />
             <label className="text-xs text-slate-500 flex items-center gap-1.5">
@@ -123,7 +123,7 @@ function ModuleList({ modules, selected, onSelect, onChanged, can }) {
               {busy ? 'Saving…' : editingId ? 'Save changes' : 'Create module'}
             </button>
             {editingId && (
-              <button type="button" onClick={() => { resetForm(); setEditingId(null); setShowNew(false); }} className="border border-line text-sm font-medium px-4 py-2 rounded-lg hover:bg-white">
+              <button type="button" onClick={() => { resetForm(); setEditingId(null); setShowNew(false); }} className="btn btn-secondary">
                 Cancel
               </button>
             )}
@@ -242,10 +242,10 @@ function LayoutBuilder({ module, can }) {
     finally { setSaving(false); }
   };
 
-  if (loading) return <div className="bg-white border border-line rounded-xl p-5 text-sm text-slate-400">Loading…</div>;
+  if (loading) return <div className="card p-5 text-sm text-slate-400">Loading…</div>;
 
   return (
-    <div className="bg-white border border-line rounded-xl p-5">
+    <div className="card p-5">
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-sm font-semibold text-ink">Layout — {module.plural_label} (detail page)</h2>
         {can('fields', 'edit') && (
@@ -361,7 +361,7 @@ function FieldBuilder({ module, can }) {
   ];
 
   return (
-    <div className="bg-white border border-line rounded-xl p-5">
+    <div className="card p-5">
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-sm font-semibold text-ink">Fields — {module.plural_label}</h2>
         {can('fields', 'create') && (
@@ -377,20 +377,20 @@ function FieldBuilder({ module, can }) {
           <div className="grid grid-cols-2 gap-2">
             <input required placeholder="api_name (e.g. budget_range)" value={form.api_name}
               onChange={(e) => setForm({ ...form, api_name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })}
-              className="border border-line rounded-lg px-3 py-2 text-sm" />
+              className="input w-auto" />
             <input required placeholder="Label (e.g. Budget Range)" value={form.label}
-              onChange={(e) => setForm({ ...form, label: e.target.value })} className="border border-line rounded-lg px-3 py-2 text-sm" />
+              onChange={(e) => setForm({ ...form, label: e.target.value })} className="input w-auto" />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <select value={form.field_type} onChange={(e) => setForm({ ...form, field_type: e.target.value })} className="border border-line rounded-lg px-3 py-2 text-sm">
+            <select value={form.field_type} onChange={(e) => setForm({ ...form, field_type: e.target.value })} className="input w-auto">
               {FIELD_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
             </select>
             <input placeholder="Section (e.g. Details)" value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value })}
-              className="border border-line rounded-lg px-3 py-2 text-sm" />
+              className="input w-auto" />
           </div>
           {OPTION_TYPES.has(form.field_type) && (
             <input placeholder="Options, comma-separated (e.g. Low, Medium, High)" value={form.options}
-              onChange={(e) => setForm({ ...form, options: e.target.value })} className="border border-line rounded-lg px-3 py-2 text-sm w-full" />
+              onChange={(e) => setForm({ ...form, options: e.target.value })} className="input" />
           )}
           <label className="text-xs text-slate-500 flex items-center gap-1.5">
             <input type="checkbox" checked={form.required} onChange={(e) => setForm({ ...form, required: e.target.checked })} /> Required
@@ -453,16 +453,16 @@ export default function SettingsModules() {
   }).finally(() => setLoading(false));
   useEffect(() => { load(); }, []);
 
-  if (loading) return <div className="p-8 text-slate-400 text-sm">Loading…</div>;
+  if (loading) return <div className="py-8 t-meta">Loading…</div>;
 
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="max-w-[1600px] mx-auto">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-amber-soft text-amber flex items-center justify-center shrink-0">
           <Boxes className="w-5 h-5" />
         </div>
         <div>
-          <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>Modules &amp; Fields</h1>
+          <h1 className="t-page-title">Modules &amp; Fields</h1>
           <p className="text-sm text-slate-500 mt-1">Create custom modules, add fields to any module, and control what shows where — no code required.</p>
         </div>
       </div>

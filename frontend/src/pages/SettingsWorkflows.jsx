@@ -140,7 +140,7 @@ function WorkflowEditor({ workflow, modules, onSave, onCancel, can }) {
   };
 
   return (
-    <div className="bg-white border border-line rounded-xl p-5 space-y-4">
+    <div className="card p-5 space-y-4">
       {error && <div className="text-xs text-warn bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
 
       <input value={wf.name} onChange={(e) => setWf({ ...wf, name: e.target.value })} placeholder="Workflow name (e.g. Escalate big deals)" className={inputClass + ' w-full text-sm font-medium'} />
@@ -204,11 +204,11 @@ function WorkflowEditor({ workflow, modules, onSave, onCancel, can }) {
 
       <div className="flex gap-2 pt-2 border-t border-line">
         {can('workflows', wf.id ? 'edit' : 'create') && (
-          <button onClick={save} disabled={saving} className="bg-amber text-white text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
+          <button onClick={save} disabled={saving} className="btn btn-primary disabled:opacity-50">
             {saving ? 'Saving…' : 'Save workflow'}
           </button>
         )}
-        <button onClick={onCancel} className="border border-line text-sm font-medium px-4 py-2 rounded-lg hover:bg-canvas">Cancel</button>
+        <button onClick={onCancel} className="btn btn-secondary">Cancel</button>
       </div>
     </div>
   );
@@ -218,7 +218,7 @@ function RunHistory({ workflowId, onClose }) {
   const [runs, setRuns] = useState(null);
   useEffect(() => { api.getWorkflowRuns(workflowId).then(setRuns); }, [workflowId]);
   return (
-    <div className="bg-white border border-line rounded-xl p-5 mt-3">
+    <div className="card p-5 mt-3">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-ink">Recent runs</h3>
         <button onClick={onClose} className="text-slate-400 hover:text-ink"><X className="w-4 h-4" /></button>
@@ -280,17 +280,17 @@ export default function SettingsWorkflows() {
   const toggleActive = async (wf) => { await api.updateWorkflow(wf.id, { active: wf.active ? 0 : 1 }); load(); };
   const remove = async (wf) => { if (!confirm(`Delete "${wf.name}"?`)) return; await api.deleteWorkflow(wf.id); load(); };
 
-  if (loading) return <div className="p-8 text-slate-400 text-sm">Loading…</div>;
+  if (loading) return <div className="py-8 t-meta">Loading…</div>;
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="max-w-4xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
             <Zap className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>Workflows</h1>
+            <h1 className="t-page-title">Workflows</h1>
             <p className="text-sm text-slate-500 mt-1">Automate what happens when a record is created, updated, or a field changes — no code required.</p>
           </div>
         </div>
@@ -310,7 +310,7 @@ export default function SettingsWorkflows() {
       {!editing && (
         <div className="space-y-3 mt-6">
           {workflows.map((wf) => (
-            <div key={wf.id} className="bg-white border border-line rounded-xl p-4">
+            <div key={wf.id} className="card p-4">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <div className="text-sm font-medium text-ink flex items-center gap-2">
@@ -333,7 +333,7 @@ export default function SettingsWorkflows() {
             </div>
           ))}
           {workflows.length === 0 && (
-            <div className="bg-white border border-line rounded-xl p-8 text-center text-sm text-slate-400">
+            <div className="card p-8 text-center text-sm text-slate-400">
               No workflows yet. Create one to automate a repetitive step.
             </div>
           )}

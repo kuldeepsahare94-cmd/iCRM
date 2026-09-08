@@ -4,6 +4,7 @@ import { ArrowLeft, UserCheck, Phone, Mail, MessageCircle, CalendarClock, Pencil
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 import StatusBadge from '../components/StatusBadge';
+import DisposeLeadModal from '../components/DisposeLeadModal';
 
 const FUNNEL_STAGES = ['New', 'Contacted', 'Interested', 'Follow-up', 'Converted'];
 const ALL_STATUSES = ['New', 'Contacted', 'Interested', 'Follow-up', 'Converted', 'Not Interested', 'Dropped'];
@@ -40,6 +41,7 @@ export default function LeadDetail() {
   const navigate = useNavigate();
   const can = usePermissions();
   const [lead, setLead] = useState(null);
+  const [disposing, setDisposing] = useState(false);
   const [tab, setTab] = useState('note');
   const [note, setNote] = useState('');
   const [scheduling, setScheduling] = useState(false);
@@ -92,7 +94,7 @@ export default function LeadDetail() {
   const filteredActivities = tab === 'all' ? lead.activities : lead.activities.filter((a) => a.type === tab);
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="max-w-[1400px] mx-auto">
       <button onClick={() => navigate('/leads')} className="flex items-center gap-1 text-xs text-slate-500 hover:text-ink mb-1">
         <ArrowLeft className="w-3.5 h-3.5" /> Leads
       </button>
@@ -130,6 +132,12 @@ export default function LeadDetail() {
             {can('leads', 'edit') && !lead.converted_contact_id && (
               <button onClick={convert} className="flex items-center gap-1.5 bg-white text-amber-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-amber-50 h-fit">
                 <UserCheck className="w-4 h-4" /> Convert Lead
+              </button>
+            )}
+            {can('calls', 'create') && !lead.converted_contact_id && (
+              <button onClick={() => setDisposing(true)}
+                className="flex items-center gap-1.5 bg-white text-amber-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-amber-50 h-fit">
+                <Phone className="w-4 h-4" /> Dispose Call
               </button>
             )}
           </div>
@@ -197,12 +205,12 @@ export default function LeadDetail() {
 
       {/* Edit form */}
       {editing && (
-        <form onSubmit={saveEdit} className="bg-white border border-line rounded-xl p-5 mt-4 grid grid-cols-2 gap-3">
+        <form onSubmit={saveEdit} className="card p-5 mt-4 grid grid-cols-2 gap-3">
           <input placeholder="Name" className="border border-line rounded-lg px-3 py-2 text-sm col-span-2" value={form.student_name || ''} onChange={(e) => setForm({ ...form, student_name: e.target.value })} />
-          <input placeholder="Mobile" className="border border-line rounded-lg px-3 py-2 text-sm" value={form.mobile || ''} onChange={(e) => setForm({ ...form, mobile: e.target.value })} />
-          <input placeholder="Alt mobile" className="border border-line rounded-lg px-3 py-2 text-sm" value={form.alternate_mobile || ''} onChange={(e) => setForm({ ...form, alternate_mobile: e.target.value })} />
-          <input placeholder="Email" className="border border-line rounded-lg px-3 py-2 text-sm" value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <input placeholder="City" className="border border-line rounded-lg px-3 py-2 text-sm" value={form.city || ''} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+          <input placeholder="Mobile" className="input w-auto" value={form.mobile || ''} onChange={(e) => setForm({ ...form, mobile: e.target.value })} />
+          <input placeholder="Alt mobile" className="input w-auto" value={form.alternate_mobile || ''} onChange={(e) => setForm({ ...form, alternate_mobile: e.target.value })} />
+          <input placeholder="Email" className="input w-auto" value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <input placeholder="City" className="input w-auto" value={form.city || ''} onChange={(e) => setForm({ ...form, city: e.target.value })} />
           <div className="col-span-2 flex gap-2">
             <button type="submit" className="bg-amber text-white text-sm font-medium px-4 py-2 rounded-lg">Save</button>
             <button type="button" onClick={() => setEditing(false)} className="border border-line text-sm font-medium px-4 py-2 rounded-lg"><X className="w-4 h-4" /></button>
@@ -213,7 +221,7 @@ export default function LeadDetail() {
       <div className="grid md:grid-cols-2 gap-6 mt-4">
         {/* Left: info cards */}
         <div className="space-y-4">
-          <div className="bg-white border border-line rounded-xl p-4">
+          <div className="card p-4">
             <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Contact</h3>
             <dl className="text-sm space-y-1.5">
               <div className="flex justify-between"><dt className="text-slate-400">Mobile</dt><dd className="text-ink">{lead.mobile || '—'}</dd></div>
@@ -222,7 +230,7 @@ export default function LeadDetail() {
             </dl>
           </div>
 
-          <div className="bg-white border border-line rounded-xl p-4">
+          <div className="card p-4">
             <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Personal</h3>
             <dl className="text-sm space-y-1.5">
               <div className="flex justify-between"><dt className="text-slate-400">Gender</dt><dd className="text-ink">{lead.gender || '—'}</dd></div>
@@ -231,7 +239,7 @@ export default function LeadDetail() {
             </dl>
           </div>
 
-          <div className="bg-white border border-line rounded-xl p-4">
+          <div className="card p-4">
             <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Academic</h3>
             <dl className="text-sm space-y-1.5">
               <div className="flex justify-between"><dt className="text-slate-400">Qualification</dt><dd className="text-ink">{lead.qualification || '—'}</dd></div>
@@ -239,7 +247,7 @@ export default function LeadDetail() {
             </dl>
           </div>
 
-          <div className="bg-white border border-line rounded-xl p-4">
+          <div className="card p-4">
             <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Assignment</h3>
             <dl className="text-sm space-y-1.5">
               <div className="flex justify-between"><dt className="text-slate-400">Counselor</dt><dd className="text-ink">{lead.assigned_counselor || '—'}</dd></div>
@@ -249,7 +257,7 @@ export default function LeadDetail() {
           </div>
 
           {can('leads', 'edit') && !lead.converted_contact_id && (
-            <div className="bg-white border border-line rounded-xl p-4">
+            <div className="card p-4">
               <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Change Status</h3>
               <p className="text-xs text-slate-400 mb-2">Move this lead to a different stage</p>
               <div className="flex flex-wrap gap-1.5">
@@ -267,7 +275,7 @@ export default function LeadDetail() {
         </div>
 
         {/* Right: activity panel */}
-        <div className="bg-white border border-line rounded-xl p-4 h-fit">
+        <div className="card p-4 h-fit">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-ink">Activity</h3>
             <span className="text-xs text-slate-400">{lead.activities.length} entries</span>
@@ -302,6 +310,11 @@ export default function LeadDetail() {
           </div>
         </div>
       </div>
+
+      {disposing && (
+        <DisposeLeadModal lead={lead} onClose={() => setDisposing(false)}
+          onDisposed={() => { setDisposing(false); load(); }} />
+      )}
     </div>
   );
 }

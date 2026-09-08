@@ -1,15 +1,49 @@
 @import "tailwindcss";
 
+/* ============================================================
+   iCRM design system
+   One source of truth for colour, surface and type. Components
+   reference these tokens rather than hard-coded hex values, so
+   the whole product restyles from here.
+   ============================================================ */
 @theme {
-  --color-ink: #14213D;
-  --color-ink-light: #2A3F63;
-  --color-amber: #E3A008;
-  --color-amber-soft: #FDF3D9;
-  --color-canvas: #F6F5F1;
-  --color-line: #E2E0D8;
-  --color-good: #2F855A;
-  --color-warn: #C05621;
-  --font-display: "Space Grotesk", "Segoe UI", sans-serif;
+  /* Brand — indigo/violet family, the SaaS-standard primary */
+  --color-brand: #4F46E5;
+  --color-brand-hover: #4338CA;
+  --color-brand-soft: #EEF2FF;
+  --color-brand-border: #C7D2FE;
+
+  /* Surfaces */
+  --color-canvas: #F7F8FC;      /* app background */
+  --color-surface: #FFFFFF;     /* cards, tables, drawer */
+  --color-line: #E7E9F0;        /* borders/dividers — deliberately soft */
+  --color-line-strong: #D3D7E3;
+
+  /* Text */
+  --color-ink: #101423;         /* headings */
+  --color-ink-light: #1E2338;
+  --color-muted: #6B7280;       /* secondary/metadata */
+  --color-faint: #9CA3AF;
+
+  /* Semantic — each has a solid tone and a pastel surface.
+     Statuses map to these so the same meaning always looks the same. */
+  --color-info: #2563EB;        --color-info-soft: #EFF6FF;
+  --color-success: #059669;     --color-success-soft: #ECFDF5;
+  --color-warning: #D97706;     --color-warning-soft: #FFFBEB;
+  --color-attention: #EA580C;   --color-attention-soft: #FFF7ED;
+  --color-danger: #DC2626;      --color-danger-soft: #FEF2F2;
+  --color-special: #7C3AED;     --color-special-soft: #F5F3FF;
+  --color-neutral: #64748B;     --color-neutral-soft: #F1F5F9;
+
+  /* Legacy aliases — the previous palette is referenced across many
+     existing components. Mapping them here restyles those to the new
+     system without touching every file, and avoids a big-bang rewrite. */
+  --color-amber: #4F46E5;
+  --color-amber-soft: #EEF2FF;
+  --color-good: #059669;
+  --color-warn: #DC2626;
+
+  --font-display: "Inter", "Segoe UI", sans-serif;
   --font-body: "Inter", "Segoe UI", sans-serif;
 }
 
@@ -17,50 +51,111 @@ body {
   background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
 }
+
+/* Type scale — kept restrained; hierarchy comes from weight and
+   colour more than size, which reads as more professional. */
+.t-page-title  { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; color: var(--color-ink); }
+.t-page-sub    { font-size: 0.875rem; color: var(--color-muted); }
+.t-section     { font-size: 0.9375rem; font-weight: 600; color: var(--color-ink); }
+.t-meta        { font-size: 0.75rem; color: var(--color-muted); }
+
+/* Surfaces */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px rgba(16, 20, 35, 0.04);
+}
+.card-hover { transition: box-shadow .15s ease, border-color .15s ease; }
+.card-hover:hover {
+  box-shadow: 0 4px 12px rgba(16, 20, 35, 0.08);
+  border-color: var(--color-line-strong);
+}
+
+/* Controls */
+.btn {
+  display: inline-flex; align-items: center; gap: .5rem;
+  font-size: .875rem; font-weight: 500;
+  padding: .5rem .875rem; border-radius: .5rem;
+  transition: background-color .15s ease, border-color .15s ease;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--color-brand); color: #fff; }
+.btn-primary:hover { background: var(--color-brand-hover); }
+.btn-secondary { background: var(--color-surface); color: var(--color-ink); border: 1px solid var(--color-line); }
+.btn-secondary:hover { background: var(--color-canvas); }
+.btn-ghost { color: var(--color-muted); }
+.btn-ghost:hover { background: var(--color-canvas); color: var(--color-ink); }
+
+.input {
+  width: 100%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: .5rem;
+  padding: .5rem .75rem;
+  font-size: .875rem;
+  color: var(--color-ink);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px var(--color-brand-soft);
+}
+.input::placeholder { color: var(--color-faint); }
+
+/* Visible focus for keyboard users, without adding noise for mouse users */
+:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
+
+/* Skeleton loading */
+@keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+.skeleton {
+  background: linear-gradient(90deg, #EEF0F6 25%, #F7F8FC 50%, #EEF0F6 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+  border-radius: .375rem;
+}
+
+/* Drawer motion — fast and subtle, per the brief */
+.drawer-panel { transition: transform .2s cubic-bezier(.4,0,.2,1); }
+.drawer-backdrop { transition: opacity .2s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-panel, .drawer-backdrop, .card-hover { transition: none; }
+  .skeleton { animation: none; }
+}
+
+/* Thin scrollbars for the Kanban's horizontal scroll */
+.thin-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
+.thin-scroll::-webkit-scrollbar-track { background: transparent; }
+.thin-scroll::-webkit-scrollbar-thumb { background: var(--color-line-strong); border-radius: 4px; }
 
 /* ===== Dark mode =====
-   Applied via a .dark-mode class on <html>, toggled from Appearance settings.
-   Cards/surfaces use bg-white and text-slate-* utilities throughout the app;
-   these overrides remap them to dark-appropriate values without needing to
-   touch every component. */
+   Applied via .dark-mode on <html>, toggled from Appearance settings. */
 html.dark-mode {
-  --color-canvas: #14161C;
-  --color-line: #2A2D36;
+  --color-canvas: #0F1117;
+  --color-surface: #171A21;
+  --color-line: #262A34;
+  --color-line-strong: #333846;
+  --color-ink: #F1F2F6;
+  --color-ink-light: #D8DAE2;
+  --color-muted: #9AA0AE;
+  --color-faint: #6E7484;
+  --color-brand-soft: #1E1B4B;
+  --color-brand-border: #3730A3;
 }
-html.dark-mode body {
-  background: var(--color-canvas);
-  color: #E7E7EA;
+html.dark-mode body { background: var(--color-canvas); color: var(--color-ink); }
+html.dark-mode .bg-white { background-color: var(--color-surface) !important; }
+html.dark-mode .text-ink { color: var(--color-ink) !important; }
+html.dark-mode .text-slate-400 { color: var(--color-faint) !important; }
+html.dark-mode .text-slate-500 { color: var(--color-muted) !important; }
+html.dark-mode .text-slate-600 { color: var(--color-ink-light) !important; }
+html.dark-mode input, html.dark-mode select, html.dark-mode textarea {
+  background-color: var(--color-surface); color: var(--color-ink);
 }
-html.dark-mode .bg-white {
-  background-color: #1D2027 !important;
-  color: #E7E7EA;
-}
-html.dark-mode .text-ink {
-  color: #F1F1F3 !important;
-}
-html.dark-mode .text-slate-400 { color: #7A7E8C !important; }
-html.dark-mode .text-slate-500 { color: #9498A6 !important; }
-html.dark-mode .text-slate-600 { color: #AAB0C0 !important; }
-html.dark-mode .bg-canvas\/60:hover,
-html.dark-mode .hover\:bg-canvas:hover,
-html.dark-mode .bg-canvas\/40,
-html.dark-mode .bg-canvas\/30 {
-  background-color: #23262F !important;
-}
-html.dark-mode input,
-html.dark-mode select,
-html.dark-mode textarea {
-  background-color: #1D2027;
-  color: #E7E7EA;
-}
-html.dark-mode ::placeholder {
-  color: #6B6F7B;
-}
-
-/* ===== Print support (Reports page "Print" / "Export to PDF" — browser print dialog) ===== */
-@media print {
-  aside, nav, .no-print { display: none !important; }
-  main { margin: 0 !important; padding: 0 !important; }
-  body { background: white !important; }
+html.dark-mode .skeleton {
+  background: linear-gradient(90deg, #1C1F27 25%, #23262F 50%, #1C1F27 75%);
+  background-size: 800px 100%;
 }

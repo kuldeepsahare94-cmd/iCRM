@@ -31,10 +31,10 @@ export default function Users() {
   const changeRole = async (u, role_id) => { await api.updateUser(u.id, { role_id: role_id || null }); load(); };
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>Users</h1>
+          <h1 className="t-page-title">Users</h1>
           <p className="text-sm text-slate-500 mt-1">Team members and the role each one is assigned.</p>
         </div>
         <button onClick={() => setShowForm((s) => !s)} className="bg-ink text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-ink-light">
@@ -43,14 +43,14 @@ export default function Users() {
       </div>
 
       {showForm && (
-        <form onSubmit={submit} className="bg-white border border-line rounded-xl p-5 mt-5 grid grid-cols-2 gap-4">
-          <input required placeholder="Username" className="border border-line rounded-lg px-3 py-2 text-sm"
+        <form onSubmit={submit} className="card p-5 mt-5 grid grid-cols-2 gap-4">
+          <input required placeholder="Username" className="input w-auto"
             value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
-          <input required type="password" placeholder="Password (min 6 chars)" className="border border-line rounded-lg px-3 py-2 text-sm"
+          <input required type="password" placeholder="Password (min 6 chars)" className="input w-auto"
             value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-          <input placeholder="Full name" className="border border-line rounded-lg px-3 py-2 text-sm"
+          <input placeholder="Full name" className="input w-auto"
             value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
-          <select className="border border-line rounded-lg px-3 py-2 text-sm" value={form.role_id} onChange={(e) => setForm({ ...form, role_id: e.target.value })}>
+          <select className="input w-auto" value={form.role_id} onChange={(e) => setForm({ ...form, role_id: e.target.value })}>
             <option value="">Select role…</option>
             {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
@@ -58,10 +58,10 @@ export default function Users() {
         </form>
       )}
 
-      <div className="bg-white border border-line rounded-xl mt-6 overflow-hidden">
+      <div className="card mt-6 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-500 bg-canvas border-b border-line">
+            <tr className="text-left bg-[var(--color-canvas)] border-b border-line">
               <th className="py-3 px-4 font-medium">Username</th>
               <th className="py-3 px-4 font-medium">Full Name</th>
               <th className="py-3 px-4 font-medium">Role</th>

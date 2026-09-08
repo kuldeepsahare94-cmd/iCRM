@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Settings as SettingsIcon, Plus, Trash2, Sparkles, Database, ShieldCheck, Boxes, Zap, GitBranch, Users2 } from 'lucide-react';
+import { Settings as SettingsIcon, Plus, Trash2, Sparkles, Database, ShieldCheck, Boxes, Zap, GitBranch, Users2, History, Percent } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 
@@ -22,32 +22,32 @@ function ReceiptTemplateCard({ template, onSaved }) {
   };
 
   return (
-    <div className="bg-white border border-line rounded-xl p-5">
+    <div className="card p-5">
       <h3 className="text-sm font-semibold text-ink mb-3">Institute {template.id} Receipt Template</h3>
       <div className="space-y-3">
         <div>
           <label className="text-xs font-medium text-slate-500 block mb-1">Institute Name</label>
-          <input className="border border-line rounded-lg px-3 py-2 text-sm w-full" value={form.institute_name || ''}
+          <input className="input" value={form.institute_name || ''}
             onChange={(e) => setForm({ ...form, institute_name: e.target.value })} />
         </div>
         <div>
           <label className="text-xs font-medium text-slate-500 block mb-1">Logo URL</label>
-          <input className="border border-line rounded-lg px-3 py-2 text-sm w-full" value={form.logo_url || ''}
+          <input className="input" value={form.logo_url || ''}
             placeholder="https://…" onChange={(e) => setForm({ ...form, logo_url: e.target.value })} />
         </div>
         <div>
           <label className="text-xs font-medium text-slate-500 block mb-1">Address</label>
-          <textarea className="border border-line rounded-lg px-3 py-2 text-sm w-full" value={form.address || ''}
+          <textarea className="input" value={form.address || ''}
             onChange={(e) => setForm({ ...form, address: e.target.value })} />
         </div>
         <div>
           <label className="text-xs font-medium text-slate-500 block mb-1">GST Details</label>
-          <input className="border border-line rounded-lg px-3 py-2 text-sm w-full" value={form.gst_details || ''}
+          <input className="input" value={form.gst_details || ''}
             onChange={(e) => setForm({ ...form, gst_details: e.target.value })} />
         </div>
         <div>
           <label className="text-xs font-medium text-slate-500 block mb-1">Footer Text</label>
-          <textarea className="border border-line rounded-lg px-3 py-2 text-sm w-full" value={form.footer_text || ''}
+          <textarea className="input" value={form.footer_text || ''}
             onChange={(e) => setForm({ ...form, footer_text: e.target.value })} />
         </div>
         <button onClick={save} disabled={saving} className="bg-amber text-white text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-60">
@@ -76,7 +76,7 @@ function OptionList({ listType, label }) {
   const remove = async (o) => { await api.deleteMasterOption(o.id); load(); };
 
   return (
-    <div className="bg-white border border-line rounded-xl p-5">
+    <div className="card p-5">
       <h3 className="text-sm font-semibold text-ink mb-3">{label}</h3>
       <ul className="space-y-1.5 mb-3">
         {options.map((o) => (
@@ -101,10 +101,10 @@ function AiAuditLog() {
   useEffect(() => { api.assistantAuditLog().then(setRows).catch(() => setRows([])); }, []);
   if (rows === null) return null;
   return (
-    <div className="bg-white border border-line rounded-xl overflow-hidden overflow-x-auto">
+    <div className="card overflow-hidden overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-left text-slate-500 bg-canvas border-b border-line">
+          <tr className="text-left bg-[var(--color-canvas)] border-b border-line">
             <th className="py-2.5 px-4 font-medium">When</th>
             <th className="py-2.5 px-4 font-medium">User</th>
             <th className="py-2.5 px-4 font-medium">Tool</th>
@@ -184,20 +184,20 @@ export default function Settings() {
   };
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="max-w-[1400px] mx-auto">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-amber-soft text-amber flex items-center justify-center">
           <SettingsIcon className="w-5 h-5" />
         </div>
         <div>
-          <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>Settings</h1>
+          <h1 className="t-page-title">Settings</h1>
           <p className="text-sm text-slate-500 mt-1">Receipt templates and master option lists.</p>
         </div>
       </div>
 
       {can('settings', 'edit') && (
         <Link to="/settings/modules"
-          className="bg-white border border-line rounded-xl p-5 mt-8 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
+          className="card p-5 mt-8 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
               <Boxes className="w-5 h-5" />
@@ -215,7 +215,7 @@ export default function Settings() {
 
       {can('settings', 'edit') && (
         <Link to="/settings/workflows"
-          className="bg-white border border-line rounded-xl p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
+          className="card p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
               <Zap className="w-5 h-5" />
@@ -233,7 +233,7 @@ export default function Settings() {
 
       {can('settings', 'edit') && (
         <Link to="/settings/pipelines"
-          className="bg-white border border-line rounded-xl p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
+          className="card p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
               <GitBranch className="w-5 h-5" />
@@ -251,7 +251,7 @@ export default function Settings() {
 
       {can('settings', 'edit') && (
         <Link to="/settings/teams"
-          className="bg-white border border-line rounded-xl p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
+          className="card p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
               <Users2 className="w-5 h-5" />
@@ -267,8 +267,44 @@ export default function Settings() {
         </Link>
       )}
 
+      {can('settings', 'view') && (
+        <Link to="/settings/data"
+          className="card p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+              <History className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-ink">Data &amp; Audit</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Bulk import/export any module as CSV, and see who changed what.
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-amber shrink-0">Open →</span>
+        </Link>
+      )}
+
       {can('settings', 'edit') && (
-        <div className="bg-white border border-line rounded-xl p-5 mt-4 flex items-center justify-between flex-wrap gap-3">
+        <Link to="/settings/finance"
+          className="card p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+              <Percent className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-ink">Taxes &amp; Currencies</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Tax rates for quotes and products, and the currencies you trade in.
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-amber shrink-0">Open →</span>
+        </Link>
+      )}
+
+      {can('settings', 'edit') && (
+        <div className="card p-5 mt-4 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
               <Database className="w-5 h-5" />
@@ -293,7 +329,7 @@ export default function Settings() {
       )}
 
       {can('settings', 'edit') && (
-        <div className="bg-white border border-line rounded-xl p-5 mt-4">
+        <div className="card p-5 mt-4">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-50 text-good flex items-center justify-center shrink-0">
               <ShieldCheck className="w-5 h-5" />

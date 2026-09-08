@@ -236,6 +236,26 @@ export const api = {
   quotationPdfUrl: (id, institute) => `${BASE}/quotations/${id}/pdf?institute=${institute || 'A'}`,
   sendQuotation: (id, body) => req('POST', `/quotations/${id}/send`, body),
 
+  // Universal CRM — Audit log + Import/Export
+  listAudit: (params) => req('GET', '/admin/audit' + qs(params)),
+  exportUrl: (moduleApiName) => `${BASE}/admin/export/${moduleApiName}`,
+  importTemplateUrl: (moduleApiName) => `${BASE}/admin/import-template/${moduleApiName}`,
+  importCsv: (moduleApiName, csv, dryRun) => req('POST', `/admin/import/${moduleApiName}`, { csv, dry_run: !!dryRun }),
+
+  // Call disposition + call analytics
+  disposeCall: (body) => req('POST', '/calls/dispose', body),
+  callReport: (params) => req('GET', '/calls/report' + qs(params)),
+
+  // Universal CRM — Taxes & Currencies
+  listTaxes: () => req('GET', '/finance/taxes'),
+  createTax: (body) => req('POST', '/finance/taxes', body),
+  updateTax: (id, body) => req('PUT', `/finance/taxes/${id}`, body),
+  deleteTax: (id) => req('DELETE', `/finance/taxes/${id}`),
+  listCurrencies: () => req('GET', '/finance/currencies'),
+  createCurrency: (body) => req('POST', '/finance/currencies', body),
+  updateCurrency: (code, body) => req('PUT', `/finance/currencies/${code}`, body),
+  deleteCurrency: (code) => req('DELETE', `/finance/currencies/${code}`),
+
   // Universal CRM — Teams
   listTeams: () => req('GET', '/teams'),
   createTeam: (body) => req('POST', '/teams', body),
