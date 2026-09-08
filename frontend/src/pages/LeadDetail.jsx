@@ -240,17 +240,18 @@ export default function LeadDetail() {
           </div>
 
           <div className="card p-4">
-            <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Academic</h3>
+            <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Interest</h3>
             <dl className="text-sm space-y-1.5">
-              <div className="flex justify-between"><dt className="text-slate-400">Qualification</dt><dd className="text-ink">{lead.qualification || '—'}</dd></div>
-              <div className="flex justify-between"><dt className="text-slate-400">Interested Course</dt><dd className="text-ink">{lead.interested_course_name || '—'}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-400">Product Interest</dt><dd className="text-ink">{lead.product_interest || '—'}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-400">Service Interest</dt><dd className="text-ink">{lead.service_interest || '—'}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-400">Campaign</dt><dd className="text-ink">{lead.campaign || '—'}</dd></div>
             </dl>
           </div>
 
           <div className="card p-4">
             <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Assignment</h3>
             <dl className="text-sm space-y-1.5">
-              <div className="flex justify-between"><dt className="text-slate-400">Counselor</dt><dd className="text-ink">{lead.assigned_counselor || '—'}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-400">Owner</dt><dd className="text-ink">{lead.assigned_counselor || '—'}</dd></div>
               <div className="flex justify-between"><dt className="text-slate-400">Source</dt><dd className="text-ink">{lead.source || '—'}</dd></div>
               <div className="flex justify-between"><dt className="text-slate-400">Created On</dt><dd className="text-ink">{lead.created_at?.slice(0, 10)}</dd></div>
             </dl>

@@ -188,3 +188,31 @@ export function EmptyState({ icon: Icon = Inbox, title, description, children })
     </div>
   );
 }
+
+/* ------------------------------------------------------------------
+   Turns whatever an API threw into something safe to show a user.
+   Raw upstream payloads (e.g. a provider's JSON error body) must never
+   reach the screen — they leak internals and mean nothing to an
+   end user. The original is returned separately for the collapsible
+   "technical details" block and stays in the console for developers.
+   ------------------------------------------------------------------ */
+export function friendlyError(err, fallback = 'Something went wrong.') {
+  const raw = typeof err === 'string' ? err : (err?.message || '');
+  if (raw) console.error('[iCRM]', err);
+
+  // A JSON blob or a bare HTTP status is never user-facing.
+  const looksTechnical = /^\s*[[{]/.test(raw) || /\b\d{3}\s*[{[]/.test(raw) || raw.length > 160;
+
+  const known = [
+    [/credit balance|billing|quota|insufficient_quota/i,
+      'The AI service is unavailable — its account needs attention. Contact your administrator.'],
+    [/api[_ ]?key|unauthorized|401/i,
+      "The AI service isn't configured. Ask your administrator to set the API key."],
+    [/rate.?limit|429/i, 'The AI service is busy right now. Please try again shortly.'],
+    [/timeout|ETIMEDOUT|network|fetch failed/i, 'The request timed out. Please check your connection and retry.'],
+    [/50\d\b/, 'The server had a problem completing that. Please try again.'],
+  ];
+  for (const [re, msg] of known) if (re.test(raw)) return { message: msg, detail: raw };
+
+  return { message: looksTechnical || !raw ? fallback : raw, detail: raw };
+}

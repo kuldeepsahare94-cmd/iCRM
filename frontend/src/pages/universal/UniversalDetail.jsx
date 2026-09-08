@@ -4,6 +4,7 @@ import { ArrowLeft, Trash2, Pencil, Send, MessageCircle, Sparkles, CheckSquare, 
 import { api } from '../../api';
 import { usePermissions } from '../../context/usePermissions';
 import StatusBadge from '../../components/StatusBadge';
+import { friendlyError } from '../../components/ui';
 import { getFieldValue, formatFieldValue, FieldInput, recordTitle } from './fieldUtils';
 import { computeFollowupStatus, findFollowupField } from './followupUtils';
 
@@ -156,7 +157,7 @@ function DocumentsPanel({ moduleApiName, recordId }) {
       fd.append('related_record_id', recordId);
       await api.uploadDocument(fd);
       load();
-    } catch (err) { setError(err.message); } finally { setBusy(false); e.target.value = ''; }
+    } catch (err) { setError(friendlyError(err).message); } finally { setBusy(false); e.target.value = ''; }
   };
 
   const addLink = async (e) => {
@@ -167,12 +168,12 @@ function DocumentsPanel({ moduleApiName, recordId }) {
       await api.createDocumentLink({ title: linkTitle, external_url: linkUrl, related_module: moduleApiName, related_record_id: recordId });
       setLinkTitle(''); setLinkUrl(''); setShowLink(false);
       load();
-    } catch (err) { setError(err.message); } finally { setBusy(false); }
+    } catch (err) { setError(friendlyError(err).message); } finally { setBusy(false); }
   };
 
   const remove = async (d) => {
     if (!confirm(`Delete "${d.title}"?`)) return;
-    try { await api.deleteDocument(d.id); load(); } catch (err) { setError(err.message); }
+    try { await api.deleteDocument(d.id); load(); } catch (err) { setError(friendlyError(err).message); }
   };
 
   const prettySize = (b) => (b == null ? '' : b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(0)} KB` : `${(b / 1048576).toFixed(1)} MB`);
@@ -253,7 +254,7 @@ function QuotationActionsPanel({ recordId, record, onUpdated }) {
       setShowSend(false);
       onUpdated();
     } catch (err) {
-      setError(err.message);
+      setError(friendlyError(err).message);
     } finally {
       setSending(false);
     }
@@ -316,7 +317,7 @@ function AiAnalysisPanel({ moduleApiName, recordId }) {
       const r = isAnalyze ? await api.aiAnalyze(moduleApiName, recordId, saveExtra) : await api.aiSummarize(moduleApiName, recordId, saveExtra);
       setResult(r);
     } catch (err) {
-      setError(err.message);
+      setError(friendlyError(err).message);
     } finally {
       setLoading(false);
     }

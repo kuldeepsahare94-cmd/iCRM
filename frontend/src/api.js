@@ -242,6 +242,10 @@ export const api = {
   importTemplateUrl: (moduleApiName) => `${BASE}/admin/import-template/${moduleApiName}`,
   importCsv: (moduleApiName, csv, dryRun) => req('POST', `/admin/import/${moduleApiName}`, { csv, dry_run: !!dryRun }),
 
+  // Customer 360 + scoring
+  customer360: (accountId) => req('GET', `/c360/accounts/${accountId}`),
+  leadScore: (leadId) => req('GET', `/c360/leads/${leadId}/score`),
+
   // Call disposition + call analytics
   disposeCall: (body) => req('POST', '/calls/dispose', body),
   callReport: (params) => req('GET', '/calls/report' + qs(params)),

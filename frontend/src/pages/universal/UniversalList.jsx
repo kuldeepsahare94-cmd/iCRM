@@ -132,6 +132,7 @@ export default function UniversalList() {
               {listFields.map((f) => <th key={f.id} className="py-3 px-4 font-medium">{f.label}</th>)}
               {listFields.length === 0 && <th className="py-3 px-4 font-medium">Record</th>}
               {followupField && <th className="py-3 px-4 font-medium">Follow-up</th>}
+              {module.api_name === 'accounts' && <th className="py-3 px-4 t-meta font-semibold text-right">360</th>}
             </tr>
           </thead>
           <tbody>
@@ -153,6 +154,14 @@ export default function UniversalList() {
                 )) : (
                   <td className="py-3 px-4"><Link to={`/records/${module.api_name}/${r.id}`} className="text-ink font-medium hover:text-amber">{recordTitle(r, fields)}</Link></td>
                 )}
+                {module.api_name === 'accounts' && (
+                  <td className="py-3 px-4 text-right">
+                    <Link to={`/customer-360/${r.id}`} onClick={(e) => e.stopPropagation()}
+                      className="text-xs font-medium text-[var(--color-brand)] hover:underline whitespace-nowrap">
+                      Customer 360 →
+                    </Link>
+                  </td>
+                )}
                 {followupField && (
                   <td className="py-3 px-4">
                     {(() => { const s = computeFollowupStatus(getFieldValue(r, followupField)); return (
@@ -165,7 +174,7 @@ export default function UniversalList() {
               </tr>
             ))}
             {records.length === 0 && (
-              <tr><td colSpan={Math.max(listFields.length, 1) + (followupField ? 1 : 0)} className="py-8 text-center text-slate-400">
+              <tr><td colSpan={Math.max(listFields.length, 1) + (followupField ? 1 : 0) + (module.api_name === 'accounts' ? 1 : 0)} className="py-8 text-center text-slate-400">
                 No {module.plural_label.toLowerCase()} yet. Add your first one above.
               </td></tr>
             )}

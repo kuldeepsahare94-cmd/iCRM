@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Users, TrendingUp, CalendarClock, IndianRupee, Target, LifeBuoy, PhoneCall, Repeat, AlertTriangle, Sparkles } from 'lucide-react';
 import { api } from '../api';
+import { friendlyError } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 
 const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
@@ -64,7 +65,7 @@ function AskAiWidget() {
       const r = await api.aiAskDashboard(question.trim());
       setAnswer(r.answer);
     } catch (err) {
-      setError(err.message);
+      setError(friendlyError(err, 'Could not get an answer right now.').message);
     } finally {
       setLoading(false);
     }

@@ -19,6 +19,7 @@ import SettingsTeams from './pages/SettingsTeams';
 import SettingsData from './pages/SettingsData';
 import SettingsFinance from './pages/SettingsFinance';
 import CallReports from './pages/CallReports';
+import Customer360 from './pages/Customer360';
 import Appearance from './pages/Appearance';
 import WhatsAppIntegrations from './pages/WhatsAppIntegrations';
 import WhatsAppTemplates from './pages/WhatsAppTemplates';
@@ -46,6 +47,7 @@ export default function App() {
               <Route path="/payments/:id" element={<Payments />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/call-reports" element={<CallReports />} />
+              <Route path="/customer-360/:id" element={<Customer360 />} />
               <Route path="/roles" element={<Roles />} />
               <Route path="/users" element={<Users />} />
               <Route path="/settings" element={<Settings />} />
