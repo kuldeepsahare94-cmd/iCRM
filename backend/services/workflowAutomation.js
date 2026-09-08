@@ -102,9 +102,58 @@ function runAction(action, module, record, userId) {
   }
 }
 
+// Records what changed, for the Audit Log (Settings -> Audit Log). Called
+// from fireWorkflows because that's already invoked on every module's
+// create/update path — hooking here gives complete coverage in one place
+// instead of editing 14 route files, and keeps audit and automation in
+// step with each other by construction.
+//
+// Errors are swallowed for the same reason workflow errors are: an audit
+// write must never break the record save that triggered it.
+function writeAudit(module, eventType, record, previousRecord, userId) {
+  try {
+    if (eventType === 'record_created') {
+      db.prepare(`INSERT INTO module_audit_log (module_id, record_id, user_id, action) VALUES (?,?,?,'created')`)
+        .run(module.id, record.id, userId || null);
+      return;
+    }
+    if (eventType !== 'record_updated' || !previousRecord) return;
+
+    // One row per changed field, so the log reads as "who changed what
+    // from what to what" rather than an opaque "record updated".
+    const skip = new Set(['updated_at', 'created_at']);
+    const insert = db.prepare(`
+      INSERT INTO module_audit_log (module_id, record_id, user_id, action, field_api_name, old_value, new_value)
+      VALUES (?,?,?,'field_changed',?,?,?)
+    `);
+    let changed = 0;
+    for (const key of Object.keys(record)) {
+      if (skip.has(key) || typeof record[key] === 'object') continue;
+      const before = previousRecord[key];
+      const after = record[key];
+      if (String(before ?? '') === String(after ?? '')) continue;
+      insert.run(module.id, record.id, userId || null, key,
+        before === null || before === undefined ? null : String(before),
+        after === null || after === undefined ? null : String(after));
+      changed++;
+    }
+    // A save that changed nothing meaningful still gets one row, so the
+    // history doesn't silently omit that someone touched the record.
+    if (changed === 0) {
+      db.prepare(`INSERT INTO module_audit_log (module_id, record_id, user_id, action) VALUES (?,?,?,'updated')`)
+        .run(module.id, record.id, userId || null);
+    }
+  } catch { /* auditing must never break the save */ }
+}
+
 function fireWorkflows(moduleApiName, eventType, record, previousRecord, userId) {
   const module = getModule(moduleApiName);
   if (!module) return;
+
+  // Audit first, and only for the two "real change" events —
+  // field_changed fires alongside record_updated for workflow-matching
+  // purposes, so auditing it too would double-log every edit.
+  if (record && record.id != null) writeAudit(module, eventType, record, previousRecord, userId);
 
   let workflows = db.prepare(`SELECT * FROM crm_workflows WHERE module_id=? AND active=1 AND trigger_type=?`).all(module.id, eventType);
   if (eventType === 'field_changed') {

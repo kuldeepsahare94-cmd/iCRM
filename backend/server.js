@@ -14,6 +14,8 @@ require('./db-phase12-activities');
 require('./db-phase16-workflows');
 require('./db-phase21-generalize');
 require('./db-phase24-teams-docs');
+require('./db-phase26-taxes-currencies');
+require('./db-phase27-call-disposition');
 
 const app = express();
 
@@ -81,6 +83,7 @@ app.use('/api/products', requireAuth, require('./routes/products'));
 app.use('/api/quotations', requireAuth, require('./routes/quotations'));
 app.use('/api/subscriptions', requireAuth, require('./routes/subscriptions'));
 app.use('/api/tickets', requireAuth, require('./routes/tickets'));
+app.use('/api/calls', requireAuth, require('./routes/callDisposition'));
 app.use('/api/calls', requireAuth, require('./routes/calls'));
 app.use('/api/meetings', requireAuth, require('./routes/meetings'));
 app.use('/api/tasks', requireAuth, require('./routes/tasks'));
@@ -92,6 +95,8 @@ app.use('/api/workflows', requireAuth, require('./routes/workflows'));
 app.use('/api/pipelines', requireAuth, require('./routes/pipelines'));
 app.use('/api/teams', requireAuth, require('./routes/teams'));
 app.use('/api/documents', requireAuth, require('./routes/documents'));
+app.use('/api/admin', requireAuth, require('./routes/admin'));
+app.use('/api/finance', requireAuth, require('./routes/finance'));
 app.use('/api/ai-actions', requireAuth, require('./routes/aiActions'));
 
 const PORT = process.env.PORT || 4000;
