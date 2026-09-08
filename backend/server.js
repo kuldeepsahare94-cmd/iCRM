@@ -97,6 +97,7 @@ app.use('/api/teams', requireAuth, require('./routes/teams'));
 app.use('/api/documents', requireAuth, require('./routes/documents'));
 app.use('/api/admin', requireAuth, require('./routes/admin'));
 app.use('/api/finance', requireAuth, require('./routes/finance'));
+app.use('/api/c360', requireAuth, require('./routes/customer360'));
 app.use('/api/ai-actions', requireAuth, require('./routes/aiActions'));
 
 const PORT = process.env.PORT || 4000;
