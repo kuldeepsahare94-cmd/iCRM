@@ -1,9 +1,10 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
+import NotFound from './pages/NotFound';
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import LeadDetail from './pages/LeadDetail';
@@ -44,6 +45,18 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route path="/" element={<Dashboard />} />
+              {/* Common aliases — these previously matched nothing and
+                  rendered a blank page. */}
+              <Route path="/dashboard" element={<Navigate to="/" replace />} />
+              <Route path="/accounts" element={<Navigate to="/records/accounts" replace />} />
+              <Route path="/customers" element={<Navigate to="/records/accounts" replace />} />
+              <Route path="/contacts" element={<Navigate to="/records/contacts" replace />} />
+              <Route path="/opportunities" element={<Navigate to="/records/opportunities" replace />} />
+              <Route path="/deals" element={<Navigate to="/records/opportunities" replace />} />
+              <Route path="/quotations" element={<Navigate to="/records/quotations" replace />} />
+              <Route path="/subscriptions" element={<Navigate to="/records/subscriptions" replace />} />
+              <Route path="/tickets" element={<Navigate to="/records/tickets" replace />} />
+              <Route path="/tasks" element={<Navigate to="/records/tasks" replace />} />
               <Route path="/leads" element={<Leads />} />
               <Route path="/leads/:id" element={<LeadDetail />} />
               <Route path="/payments" element={<Payments />} />
@@ -78,6 +91,9 @@ export default function App() {
               <Route path="/records/:moduleApiName" element={<UniversalList />} />
               <Route path="/records/:moduleApiName/kanban" element={<UniversalKanban />} />
               <Route path="/records/:moduleApiName/:id" element={<UniversalDetail />} />
+              {/* Catch-all: without this, any unmatched path renders an
+                  empty tree, which looks identical to a crashed app. */}
+              <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
         </BrowserRouter>

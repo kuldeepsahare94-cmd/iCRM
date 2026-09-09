@@ -80,7 +80,40 @@ export default function UniversalList() {
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   useEffect(() => { setPage(1); }, [q, statusFilter, moduleApiName]);
 
-  if (!module) return null;
+  // Guard order matters. `if (!module) return null` used to run BEFORE the
+  // loading check, so while the module was being fetched the page rendered
+  // literally nothing — an empty content area indistinguishable from a
+  // broken page.
+  //
+  // It was also only a truthiness check. If the API returned an unexpected
+  // shape (an empty array, an object without labels) it passed this guard
+  // and then threw on `module.plural_label.toLowerCase()`, taking out the
+  // whole route.
+  if (loading) {
+    return <div className="max-w-[1600px] mx-auto"><SkeletonRows rows={8} cols={5} /></div>;
+  }
+  if (error) {
+    return (
+      <div className="max-w-[1600px] mx-auto">
+        <ErrorState message={error.message || String(error)} detail={error.detail}
+          onRetry={() => { setLoading(true); setError(''); }} />
+      </div>
+    );
+  }
+  if (!module || typeof module !== 'object' || !module.api_name) {
+    return (
+      <div className="max-w-[1600px] mx-auto">
+        <ErrorState message={`The "${moduleApiName}" module could not be loaded.`}
+          detail={`Expected module metadata, received: ${JSON.stringify(module)}`}
+          onRetry={() => { setLoading(true); setError(''); }} />
+      </div>
+    );
+  }
+
+  // Labels are rendered in several places; missing metadata must degrade to
+  // the module's api_name rather than throwing.
+  const pluralLabel = (module.plural_label || module.api_name || 'records');
+  const singularLabel = (module.singular_label || module.api_name || 'record');
 
   const submit = async (e) => {
     e.preventDefault();
@@ -105,18 +138,6 @@ export default function UniversalList() {
 
 
 
-  if (loading) {
-    return <div className="max-w-[1600px] mx-auto"><SkeletonRows rows={8} cols={5} /></div>;
-  }
-  if (error && !module) {
-    return (
-      <div className="max-w-[1600px] mx-auto">
-        <ErrorState message={error.message || error} detail={error.detail}
-          onRetry={() => { setLoading(true); setError(''); }} />
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-[1600px] mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -125,7 +146,7 @@ export default function UniversalList() {
             <ModuleIcon name={module.icon} className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="t-page-title">{module.plural_label}</h1>
+            <h1 className="t-page-title">{pluralLabel}</h1>
             {module.description && <p className="text-sm text-slate-500 mt-1">{module.description}</p>}
           </div>
         </div>
@@ -157,13 +178,13 @@ export default function UniversalList() {
         <div className="relative flex-1 min-w-[220px]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-faint)]" />
           <input value={q} onChange={(e) => setQ(e.target.value)} className="input pl-9"
-            placeholder={`Search ${module.plural_label.toLowerCase()}…`}
+            placeholder={`Search ${pluralLabel.toLowerCase()}…`}
             aria-label={`Search ${module.plural_label}`} />
         </div>
         {statusOptions.length > 0 && (
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-            className="input w-auto min-w-[150px]" aria-label={`Filter by ${statusField.label}`}>
-            <option value="">All {statusField.label.toLowerCase()}</option>
+            className="input w-auto min-w-[150px]" aria-label={`Filter by ${statusField.label || 'status'}`}>
+            <option value="">All {(statusField.label || 'statuses').toLowerCase()}</option>
             {statusOptions.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         )}
@@ -178,7 +199,7 @@ export default function UniversalList() {
             </div>
           ))}
           <button type="submit" disabled={saving} className="col-span-2 bg-amber text-white text-sm font-medium py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
-            {saving ? 'Saving…' : `Save ${module.singular_label.toLowerCase()}`}
+            {saving ? 'Saving…' : `Save ${singularLabel.toLowerCase()}`}
           </button>
         </form>
       )}
@@ -237,12 +258,12 @@ export default function UniversalList() {
         {filtered.length === 0 && (
           <div className="py-12 text-center">
             <p className="t-section mb-1">
-              No {module.plural_label.toLowerCase()} {q || statusFilter ? 'match your filters' : 'yet'}
+              No {pluralLabel.toLowerCase()} {q || statusFilter ? 'match your filters' : 'yet'}
             </p>
             <p className="t-meta">
               {q || statusFilter
                 ? 'Try clearing the search or filter.'
-                : `Add your first ${module.singular_label.toLowerCase()} to get started.`}
+                : `Add your first ${singularLabel.toLowerCase()} to get started.`}
             </p>
           </div>
         )}

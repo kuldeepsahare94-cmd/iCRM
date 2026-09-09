@@ -10,14 +10,22 @@ const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
 // Bold, colored KPI cards — a top accent bar + tinted icon chip + big number,
 // Zoho/Freshdesk-style rather than a flat white box with a tiny badge.
-function KpiCard({ label, value, sub, icon: Icon, color, to }) {
+// NOTE: this is a Dashboard-local KpiCard taking a `color` OBJECT, distinct
+// from the shared one in components/ui.jsx which takes a `tone` STRING.
+// Passing the wrong shape used to throw on `color.bar` and crash the entire
+// dashboard, so an unrecognised or missing colour now falls back instead.
+const TONE_TO_COLOR = { success: 'emerald', danger: 'rose', warning: 'amber',
+  info: 'blue', special: 'indigo', neutral: 'teal' };
+
+function KpiCard({ label, value, sub, icon: Icon, color, tone, to }) {
+  const palette = color || COLORS[TONE_TO_COLOR[tone]] || COLORS.indigo;
   const body = (
     <div className="relative bg-white border border-line rounded-xl p-5 hover:shadow-md hover:-translate-y-0.5 transition-all h-full overflow-hidden">
-      <div className="absolute top-0 left-0 right-0 h-1" style={{ background: color.bar }} />
+      <div className="absolute top-0 left-0 right-0 h-1" style={{ background: palette.bar }} />
       <div className="flex items-start justify-between">
         <div className="text-xs uppercase tracking-wide text-slate-500 font-semibold">{label}</div>
         {Icon && (
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: color.chipBg, color: color.chipText }}>
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: palette.chipBg, color: palette.chipText }}>
             <Icon className="w-4.5 h-4.5" />
           </div>
         )}
@@ -159,12 +167,12 @@ function CrmDashboardSection({ data }) {
         <>
           <SectionLabel>Performance</SectionLabel>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <KpiCard label="Deals won" value={data.performance.won} icon={CheckCircle2} tone="success" />
-            <KpiCard label="Deals lost" value={data.performance.lost} icon={XCircle} tone="danger" />
+            <KpiCard label="Deals won" value={data.performance.won} icon={CheckCircle2} color={COLORS.emerald} />
+            <KpiCard label="Deals lost" value={data.performance.lost} icon={XCircle} color={COLORS.rose} />
             <KpiCard label="Win rate"
               value={data.performance.win_rate === null ? '—' : `${data.performance.win_rate}%`}
-              icon={TrendingUp} tone={data.performance.win_rate === null ? 'neutral' : 'special'} />
-            <KpiCard label="Avg deal size" value={inr(data.performance.avg_deal_size)} icon={IndianRupee} tone="info" />
+              icon={TrendingUp} color={data.performance.win_rate === null ? COLORS.blue : COLORS.indigo} />
+            <KpiCard label="Avg deal size" value={inr(data.performance.avg_deal_size)} icon={IndianRupee} color={COLORS.blue} />
           </div>
           {data.performance.win_rate === null && (
             <p className="t-meta mt-2">No deals have closed yet, so a win rate can't be calculated.</p>

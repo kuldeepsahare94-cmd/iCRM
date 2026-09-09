@@ -1,3 +1,27 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "//": "Everything except real files falls through to the SPA. sw.js, manifest.json and assets are excluded so they are served as themselves — a service worker returned as index.html is rejected by the browser as an invalid script, which is what prevented the broken worker from ever being replaced.",
+      "source": "/((?!sw\\.js|manifest\\.json|favicon\\.svg|icons\\.svg|assets/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "//": "The kill-switch worker must never be cached, or browsers keep re-reading the old copy and stay broken.",
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Content-Type", "value": "application/javascript; charset=utf-8" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "//": "index.html must always be revalidated so a deploy is picked up immediately.",
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    }
+  ]
 }

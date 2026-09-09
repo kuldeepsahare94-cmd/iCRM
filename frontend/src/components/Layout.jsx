@@ -11,6 +11,7 @@ import NotificationBell from './NotificationBell';
 import AssistantWidget from './AssistantWidget';
 import { ModuleIcon } from './moduleIcons';
 import { Avatar } from './ui';
+import ErrorBoundary from './ErrorBoundary';
 
 // Hand-written links for the modules that have bespoke pages. Everything
 // else is generated from the module registry below, so a module created
@@ -239,7 +240,12 @@ export default function Layout() {
       </header>
 
       <main className="px-4 sm:px-6 py-6">
-        <Outlet />
+        {/* Keyed on the path so navigating away from a crashed page clears
+            the error and renders the new route normally. Without the key a
+            boundary latches permanently once tripped. */}
+        <ErrorBoundary key={location.pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       <AssistantWidget />

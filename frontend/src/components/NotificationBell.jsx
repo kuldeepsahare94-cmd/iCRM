@@ -32,7 +32,12 @@ export default function NotificationBell() {
   const ref = useRef(null);
   const navigate = useNavigate();
 
-  const load = () => api.listNotifications().then((d) => { setItems(d.items); setUnread(d.unread); });
+  // This component renders on every page, so an unhandled rejection here
+  // surfaced as an app-wide error. Notifications failing must degrade to an
+  // empty bell, never take the page down.
+  const load = () => api.listNotifications()
+    .then((d) => { setItems(d.items || []); setUnread(d.unread || 0); })
+    .catch(() => { setItems([]); setUnread(0); });
 
   useEffect(() => {
     load();
