@@ -109,7 +109,68 @@ router.get('/crm', requireAuth, (req, res) => {
   recent_activities.sort((a, b) => new Date(b.activity_date) - new Date(a.activity_date));
   recent_activities = recent_activities.slice(0, 8);
 
-  res.json({ cards, leads_by_source, opportunities_by_stage, revenue_by_month, recent_activities });
+
+  // ---- Executive additions (brief §8): answer "what is happening in my
+  // CRM today?" rather than only showing totals. All real data.
+
+  // Today's agenda — what actually needs doing, not a generic counter.
+  const agenda = {
+    follow_ups: db.prepare(`
+      SELECT id, student_name AS title, mobile, status, follow_up_date
+      FROM leads WHERE date(follow_up_date) = date(?) ORDER BY student_name LIMIT 10`).all(today),
+    meetings: db.prepare(`
+      SELECT id, meeting_title AS title, start_datetime, related_module, related_record_id
+      FROM meetings WHERE date(COALESCE(start_datetime, created_at)) = date(?) ORDER BY start_datetime LIMIT 10`).all(today),
+    tasks_due: db.prepare(`
+      SELECT id, task_title AS title, priority, due_date, related_module, related_record_id
+      FROM tasks WHERE status != 'Completed' AND date(due_date) <= date(?) ORDER BY due_date LIMIT 10`).all(today),
+  };
+
+  // Win rate over closed deals only — including open deals in the
+  // denominator would understate it and drift as the pipeline grows.
+  const closed = db.prepare(`
+    SELECT COALESCE(SUM(CASE WHEN s.is_won=1 THEN 1 ELSE 0 END),0) won,
+           COALESCE(SUM(CASE WHEN s.is_lost=1 THEN 1 ELSE 0 END),0) lost
+    FROM opportunities o JOIN module_pipeline_stages s ON s.id=o.stage_id
+    WHERE s.is_won=1 OR s.is_lost=1`).get();
+  const closedTotal = (closed.won || 0) + (closed.lost || 0);
+  const performance = {
+    won: closed.won || 0,
+    lost: closed.lost || 0,
+    // null rather than 0 when nothing has closed — 0% would read as failure.
+    win_rate: closedTotal > 0 ? Math.round((closed.won / closedTotal) * 1000) / 10 : null,
+    avg_deal_size: closed.won > 0
+      ? Math.round(db.prepare(`SELECT COALESCE(AVG(o.amount),0) v FROM opportunities o
+          JOIN module_pipeline_stages s ON s.id=o.stage_id WHERE s.is_won=1`).get().v)
+      : 0,
+  };
+
+  // Things that need a human decision, ranked.
+  const attention = [];
+  const overdueFollowUps = count(`SELECT COUNT(*) c FROM leads
+    WHERE follow_up_date IS NOT NULL AND date(follow_up_date) < date(?)
+    AND status NOT IN ('Converted','Not Interested','Dropped')`, today);
+  if (overdueFollowUps) attention.push({ severity: 'high', text: `${overdueFollowUps} overdue lead follow-up(s)`, link: '/leads' });
+  const urgentTickets = count(`SELECT COUNT(*) c FROM tickets
+    WHERE status NOT IN ('Resolved','Closed') AND priority IN ('High','Urgent')`);
+  if (urgentTickets) attention.push({ severity: 'high', text: `${urgentTickets} high-priority ticket(s) open`, link: '/records/tickets' });
+  const overdueTasks = count(`SELECT COUNT(*) c FROM tasks
+    WHERE status != 'Completed' AND due_date IS NOT NULL AND date(due_date) < date(?)`, today);
+  if (overdueTasks) attention.push({ severity: 'high', text: `${overdueTasks} overdue task(s)`, link: '/records/tasks' });
+  const staleDeals = count(`SELECT COUNT(*) c FROM opportunities o
+    LEFT JOIN module_pipeline_stages s ON s.id=o.stage_id
+    WHERE COALESCE(s.is_won,0)=0 AND COALESCE(s.is_lost,0)=0
+    AND julianday('now') - julianday(o.updated_at) > 30`);
+  if (staleDeals) attention.push({ severity: 'medium', text: `${staleDeals} deal(s) with no movement in 30+ days`, link: '/records/opportunities' });
+  const expiringQuotes = count(`SELECT COUNT(*) c FROM quotations
+    WHERE status='Sent' AND valid_until IS NOT NULL AND date(valid_until) < date(?)`, today);
+  if (expiringQuotes) attention.push({ severity: 'medium', text: `${expiringQuotes} quotation(s) past their valid-until date`, link: '/records/quotations' });
+  const renewals = count(`SELECT COUNT(*) c FROM subscriptions
+    WHERE status='Active' AND renewal_date IS NOT NULL
+    AND julianday(renewal_date) - julianday('now') BETWEEN 0 AND 30`);
+  if (renewals) attention.push({ severity: 'medium', text: `${renewals} subscription(s) renewing within 30 days`, link: '/records/subscriptions' });
+
+  res.json({ cards, agenda, performance, attention, leads_by_source, opportunities_by_stage, revenue_by_month, recent_activities });
 });
 
 module.exports = router;

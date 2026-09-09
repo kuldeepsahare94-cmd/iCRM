@@ -39,6 +39,9 @@ function healthBand(score) {
 // Assembles the final score plus its explanation table.
 function compose(components) {
   let total = 0;
+  // A component with no supporting evidence either way is flagged rather
+  // than silently scored — the brief requires transparency about which
+  // dimensions actually had data behind them (§29).
   const rows = components.map((c) => {
     const contribution = (c.score * c.weight) / 100;
     total += contribution;
@@ -49,9 +52,17 @@ function compose(components) {
       contribution: Math.round(contribution * 10) / 10,
       positives: c.positives.filter(Boolean),
       negatives: c.negatives.filter(Boolean),
+      insufficient_data: c.positives.filter(Boolean).length === 0 && c.negatives.filter(Boolean).length === 0,
     };
   });
-  return { score: clamp(total), components: rows };
+  const unsupported = rows.filter((r) => r.insufficient_data).map((r) => r.component);
+  return {
+    score: clamp(total),
+    components: rows,
+    // How much of the score rests on dimensions that actually had data.
+    confidence: Math.round(((rows.length - unsupported.length) / rows.length) * 100),
+    insufficient_data_for: unsupported,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -214,7 +225,8 @@ function scoreAccount(accountId) {
 
   return {
     ...result,
-    band: result.score >= 80 ? 'High Value' : result.score >= 60 ? 'Solid' : result.score >= 40 ? 'Developing' : 'Low',
+    // Classification labels exactly as specified in the brief (§27).
+    band: result.score >= 80 ? 'Excellent' : result.score >= 60 ? 'Healthy' : result.score >= 40 ? 'Needs Attention' : 'At Risk',
     health: { score: health, band: healthBand(health), positives: hPos, negatives: hNeg },
     account_id: accountId,
   };

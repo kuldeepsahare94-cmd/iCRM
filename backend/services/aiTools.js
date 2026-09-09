@@ -441,7 +441,7 @@ register({
     properties: { to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } },
   },
   handler: async (user, i) => {
-    if (!emailConfigured()) return { available: false, message: 'Email isn\'t connected to this CRM yet — SMTP isn\'t configured in the backend environment.' };
+    if (!emailConfigured()) return { available: false, message: 'Email isn\'t configured yet — set it up in Settings → Email.' };
     const result = await sendEmail({ to: i.to, subject: i.subject, text: i.body });
     return { sent: true, messageId: result.messageId };
   },

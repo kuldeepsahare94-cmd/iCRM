@@ -220,8 +220,8 @@ router.get('/:id/pdf', requirePermission('quotations', 'view'), (req, res) => {
 router.post('/:id/send', requirePermission('quotations', 'edit'), async (req, res) => {
   const payload = loadForPdf(req.params.id, req.body.institute);
   if (!payload) return res.status(404).json({ error: 'Quotation not found' });
-  if (!emailConfigured()) {
-    return res.status(503).json({ error: "Email isn't configured — set SMTP_HOST/SMTP_USER/SMTP_PASS on the backend to send quotations." });
+  if (!emailConfigured(req.user.id)) {
+    return res.status(503).json({ error: "Email isn't configured yet — set it up in Settings → Email." });
   }
 
   const { quotation } = payload;
@@ -235,6 +235,8 @@ router.post('/:id/send', requirePermission('quotations', 'edit'), async (req, re
     await sendEmail({
       to, subject, text,
       attachments: [{ filename: `${quotation.quote_number || 'quotation'}.pdf`, content: pdf }],
+      // Sends from this user's own address where they've configured one.
+      userId: req.user.id,
     });
 
     const existing = db.prepare('SELECT * FROM quotations WHERE id=?').get(req.params.id);

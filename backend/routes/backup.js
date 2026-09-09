@@ -22,7 +22,7 @@ router.get('/download', requirePermission('settings', 'edit'), (req, res) => {
 });
 
 router.post('/email-now', requirePermission('settings', 'edit'), async (req, res) => {
-  if (!isConfigured()) return res.status(503).json({ error: 'Email is not configured — set SMTP_HOST/SMTP_USER/SMTP_PASS on the backend first.' });
+  if (!isConfigured()) return res.status(503).json({ error: 'Email is not configured — set it up in Settings → Email first.' });
   if (!fs.existsSync(DB_PATH)) return res.status(404).json({ error: 'Database file not found.' });
 
   const { to } = req.body || {};

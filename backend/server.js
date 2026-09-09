@@ -16,6 +16,9 @@ require('./db-phase21-generalize');
 require('./db-phase24-teams-docs');
 require('./db-phase26-taxes-currencies');
 require('./db-phase27-call-disposition');
+require('./db-phase28-email-accounts');
+require('./db-phase29-inbound-email');
+require('./db-phase30-email-campaigns');
 
 const app = express();
 
@@ -98,7 +101,22 @@ app.use('/api/documents', requireAuth, require('./routes/documents'));
 app.use('/api/admin', requireAuth, require('./routes/admin'));
 app.use('/api/finance', requireAuth, require('./routes/finance'));
 app.use('/api/c360', requireAuth, require('./routes/customer360'));
+app.use('/api/email-settings', requireAuth, require('./routes/emailSettings'));
+app.use('/api/inbox', requireAuth, require('./routes/inbox'));
+// Public: hit by recipients' mail clients, which have no CRM session.
+app.use('/api/track', require('./routes/tracking'));
+app.use('/api/email-campaigns', requireAuth, require('./routes/emailCampaigns'));
 app.use('/api/ai-actions', requireAuth, require('./routes/aiActions'));
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`Placement CRM API running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Placement CRM API running on port ${PORT}`);
+  // Background inbound-mail polling. Failure here must never stop the API
+  // from serving — it's an optional feature.
+  try {
+    require('./services/inboundEmail').startPolling();
+    require('./services/emailCampaignEngine').startScheduler();
+  } catch (e) {
+    console.warn('Inbound email polling not started:', e.message);
+  }
+});
