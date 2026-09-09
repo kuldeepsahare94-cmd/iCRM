@@ -159,3 +159,42 @@ html.dark-mode .skeleton {
   background: linear-gradient(90deg, #1C1F27 25%, #23262F 50%, #1C1F27 75%);
   background-size: 800px 100%;
 }
+
+/* ===== Rich text email composer & rendered message bodies ===== */
+.rte-body:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-faint);
+  pointer-events: none;
+}
+.rte-body:focus { outline: none; }
+
+/* Shared typography for both the composer and rendered incoming mail, so
+   what you write looks like what the recipient sees. */
+.rte-body, .email-html {
+  line-height: 1.6;
+  word-break: break-word;
+}
+.rte-body a, .email-html a { color: var(--color-brand); text-decoration: underline; }
+.rte-body b, .rte-body strong, .email-html b, .email-html strong { font-weight: 700; }
+.rte-body i, .rte-body em, .email-html i, .email-html em { font-style: italic; }
+.rte-body u, .email-html u { text-decoration: underline; }
+.rte-body h1, .email-html h1 { font-size: 1.5rem; font-weight: 700; margin: .6em 0 .3em; }
+.rte-body h2, .email-html h2 { font-size: 1.25rem; font-weight: 700; margin: .6em 0 .3em; }
+.rte-body h3, .email-html h3 { font-size: 1.1rem; font-weight: 600; margin: .6em 0 .3em; }
+.rte-body p, .email-html p { margin: 0 0 .75em; }
+.rte-body ul, .email-html ul { list-style: disc; padding-left: 1.5rem; margin: .5em 0; }
+.rte-body ol, .email-html ol { list-style: decimal; padding-left: 1.5rem; margin: .5em 0; }
+.rte-body li, .email-html li { margin: .2em 0; }
+.rte-body blockquote, .email-html blockquote {
+  border-left: 3px solid var(--color-line-strong);
+  padding-left: .875rem;
+  margin: .5em 0;
+  color: var(--color-muted);
+}
+.rte-body img, .email-html img { max-width: 100%; height: auto; border-radius: .375rem; }
+.email-html table { border-collapse: collapse; max-width: 100%; }
+.email-html td, .email-html th { border: 1px solid var(--color-line); padding: .4rem .6rem; }
+/* Incoming mail often carries huge inline font sizes — cap them so one
+   message can't blow out the layout. */
+.email-html { font-size: .875rem; }
+.email-html font[size="7"], .email-html font[size="6"] { font-size: 1.25rem !important; }

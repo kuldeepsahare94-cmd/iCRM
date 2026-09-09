@@ -20,6 +20,9 @@ import SettingsData from './pages/SettingsData';
 import SettingsFinance from './pages/SettingsFinance';
 import CallReports from './pages/CallReports';
 import Customer360 from './pages/Customer360';
+import SettingsEmail from './pages/SettingsEmail';
+import Inbox from './pages/Inbox';
+import EmailCampaigns from './pages/EmailCampaigns';
 import Appearance from './pages/Appearance';
 import WhatsAppIntegrations from './pages/WhatsAppIntegrations';
 import WhatsAppTemplates from './pages/WhatsAppTemplates';
@@ -57,6 +60,9 @@ export default function App() {
               <Route path="/settings/teams" element={<SettingsTeams />} />
               <Route path="/settings/data" element={<SettingsData />} />
               <Route path="/settings/finance" element={<SettingsFinance />} />
+              <Route path="/settings/email" element={<SettingsEmail />} />
+              <Route path="/inbox" element={<Inbox />} />
+              <Route path="/email-campaigns" element={<EmailCampaigns />} />
               <Route path="/appearance" element={<Appearance />} />
               <Route path="/whatsapp" element={<WhatsAppIntegrations />} />
               <Route path="/whatsapp/templates" element={<WhatsAppTemplates />} />

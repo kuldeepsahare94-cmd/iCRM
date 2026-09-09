@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Settings as SettingsIcon, Plus, Trash2, Sparkles, Database, ShieldCheck, Boxes, Zap, GitBranch, Users2, History, Percent } from 'lucide-react';
+import { Settings as SettingsIcon, Plus, Trash2, Sparkles, Database, ShieldCheck, Boxes, Zap, GitBranch, Users2, History, Percent, Mail } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 
@@ -302,6 +302,22 @@ export default function Settings() {
           <span className="text-xs font-medium text-amber shrink-0">Open →</span>
         </Link>
       )}
+
+      <Link to="/settings/email"
+        className="bg-white border border-line rounded-xl p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+            <Mail className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-ink">Email</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Configure the mailbox this CRM sends from — organisation-wide or your own address.
+            </p>
+          </div>
+        </div>
+        <span className="text-xs font-medium text-amber shrink-0">Open →</span>
+      </Link>
 
       {can('settings', 'edit') && (
         <div className="card p-5 mt-4 flex items-center justify-between flex-wrap gap-3">

@@ -5,15 +5,15 @@ import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 import StatusBadge from '../components/StatusBadge';
 
+// Audiences available in this CRM. The education audiences (students,
+// parents) went with those modules — §25.
 const SOURCES = [
   { key: 'leads', label: 'Leads' },
-  { key: 'students', label: 'Students' },
-  { key: 'parents', label: 'Parents (via student parent mobile)' },
   { key: 'custom', label: 'Custom Uploaded List' },
 ];
 
-const LEAD_FILTERS = ['status', 'source', 'city', 'assigned_counselor'];
-const STUDENT_FILTERS = ['status', 'fee_status', 'admission_status'];
+const LEAD_FILTERS = ['status', 'source', 'city', 'lead_rating'];
+const STUDENT_FILTERS = [];  // education audience removed with those modules
 
 function CampaignBuilderModal({ providers, templates, onClose, onCreated }) {
   const [step, setStep] = useState(1);
@@ -36,7 +36,7 @@ function CampaignBuilderModal({ providers, templates, onClose, onCreated }) {
   const template = templates.find((t) => String(t.id) === String(templateId));
   const templateVars = template ? JSON.parse(template.variables_json || '[]') : [];
   const entityFields = source === 'leads'
-    ? ['student_name', 'mobile', 'source', 'city', 'status', 'assigned_counselor', 'interested_course_name']
+    ? ['student_name', 'mobile', 'source', 'city', 'status', 'assigned_counselor', 'product_interest']
     : source === 'custom' ? ['name', 'mobile']
     : ['student_name', 'mobile', 'email', 'parent_name', 'parent_mobile'];
 
@@ -103,7 +103,7 @@ function CampaignBuilderModal({ providers, templates, onClose, onCreated }) {
         {step === 1 && (
           <>
             <label className="text-xs font-medium text-slate-500 block mb-1">Campaign name</label>
-            <input required placeholder="e.g. July Admission Drive" className="border border-line rounded-lg px-3 py-2 text-sm w-full mb-3"
+            <input required placeholder="e.g. Q3 Renewal Campaign" className="border border-line rounded-lg px-3 py-2 text-sm w-full mb-3"
               value={name} onChange={(e) => setName(e.target.value)} />
 
             <label className="text-xs font-medium text-slate-500 block mb-1">Recipient source</label>

@@ -7,6 +7,7 @@ import StatusBadge from '../../components/StatusBadge';
 import { friendlyError } from '../../components/ui';
 import { getFieldValue, formatFieldValue, FieldInput, recordTitle } from './fieldUtils';
 import { computeFollowupStatus, findFollowupField } from './followupUtils';
+import AddRelatedModal, { canCreateRelation, relationTargetModule } from './AddRelatedModal';
 
 // Any array-of-objects the dedicated module route embeds in its detail
 // response (e.g. Accounts embeds contacts/opportunities/quotations/...) is
@@ -221,9 +222,10 @@ function DocumentsPanel({ moduleApiName, recordId }) {
                 {d.external_url ? (
                   <a href={d.external_url} target="_blank" rel="noreferrer" className="text-xs text-amber hover:underline">Open</a>
                 ) : (
-                  <a href={api.documentDownloadUrl(d.id)} className="text-xs text-amber hover:underline inline-flex items-center gap-1">
+                  <button onClick={() => api.downloadDocument(d.id, d.file_name).catch((e) => setError(e.message))}
+                    className="text-xs text-amber hover:underline inline-flex items-center gap-1">
                     <Download className="w-3 h-3" /> Download
-                  </a>
+                  </button>
                 )}
                 <button onClick={() => remove(d)} className="text-slate-400 hover:text-warn"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
@@ -267,10 +269,10 @@ function QuotationActionsPanel({ recordId, record, onUpdated }) {
           <FileText className="w-4 h-4 text-amber" /> Quotation document
         </div>
         <div className="flex gap-2">
-          <a href={api.quotationPdfUrl(recordId, 'A')} target="_blank" rel="noreferrer"
+          <button onClick={() => api.downloadQuotationPdf(recordId, 'A').catch((e) => setError(e.message))}
             className="text-xs border border-line rounded-lg px-3 py-1.5 hover:bg-canvas inline-flex items-center gap-1.5">
             <Download className="w-3.5 h-3.5" /> Download PDF
-          </a>
+          </button>
           <button onClick={() => setShowSend((s) => !s)}
             className="text-xs bg-amber text-white rounded-lg px-3 py-1.5 hover:opacity-90 inline-flex items-center gap-1.5">
             <Send className="w-3.5 h-3.5" /> Email quote
@@ -467,6 +469,7 @@ export default function UniversalDetail() {
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState('overview');
+  const [addingRelation, setAddingRelation] = useState(null);
   const [layout, setLayout] = useState(null); // null until loaded; { sections: [] } means "no custom layout saved"
 
   const load = () => {
@@ -661,7 +664,15 @@ export default function UniversalDetail() {
       )}
 
       {embeddedRelations.map(([key, rows]) => tab === key && (
-        <div key={key} className="card mt-5 overflow-hidden overflow-x-auto shadow-sm">
+        <div key={key} className="mt-5">
+          {canCreateRelation(key, module.api_name) && can(relationTargetModule(key), 'create') && (
+            <div className="flex justify-end mb-2">
+              <button onClick={() => setAddingRelation(key)} className="btn btn-primary">
+                + Add {key.replace(/_/g, ' ').replace(/s$/, '')}
+              </button>
+            </div>
+          )}
+          <div className="card overflow-hidden overflow-x-auto shadow-sm">
           {rows.length === 0 ? (
             <div className="py-8 text-center text-slate-400 text-sm capitalize">No {key.replace(/_/g, ' ')} yet.</div>
           ) : (
@@ -684,8 +695,16 @@ export default function UniversalDetail() {
               </tbody>
             </table>
           )}
+          </div>
         </div>
       ))}
+
+      {addingRelation && (
+        <AddRelatedModal relationKey={addingRelation} parentModule={module.api_name}
+          parentId={id} parentLabel={title}
+          onClose={() => setAddingRelation(null)}
+          onCreated={() => { setAddingRelation(null); load(); }} />
+      )}
 
       {tab === 'whatsapp' && showWhatsApp && <WhatsAppPanel moduleApiName={module.api_name} recordId={id} />}
 

@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Building2, TrendingUp, Wallet, Repeat, LifeBuoy, FileText, Users as UsersIcon,
   AlertTriangle, Activity, Info, Phone, Mail, Calendar, StickyNote, CheckSquare, Paperclip,
+  Sparkles, Target, MessageCircle, Globe, Pencil, Network, History, Plus,
 } from 'lucide-react';
 import { api } from '../api';
 import {
@@ -120,6 +121,100 @@ function Section({ title, icon: Icon, count, children, action }) {
 
 const TIMELINE_ICON = { call: Phone, meeting: Calendar, note: StickyNote, email: Mail };
 
+
+// AI customer summary (§20). Grounded server-side in this account's records.
+// When the AI service is unavailable this shows a professional error state
+// rather than any fabricated output.
+function AiSummaryPanel({ accountId }) {
+  const [summary, setSummary] = useState('');
+  const [question, setQuestion] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const run = async (q) => {
+    setLoading(true); setError(null); setSummary('');
+    try {
+      const r = await api.aiCustomerSummary(accountId, q);
+      setSummary(r.summary);
+    } catch (e) {
+      setError(friendlyError(e, 'The AI summary is unavailable right now.'));
+    } finally { setLoading(false); }
+  };
+
+  const SUGGESTED = ['Summarize this customer', 'What happened recently?',
+                     'What should I do next?', 'Which opportunities are at risk?'];
+
+  return (
+    <div className="card p-4">
+      <h2 className="t-section flex items-center gap-2 mb-1">
+        <Sparkles className="w-4 h-4" style={{ color: 'var(--color-special)' }} /> AI Customer Summary
+      </h2>
+      <p className="t-meta mb-3">Grounded in this account's own records.</p>
+
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {SUGGESTED.map((q) => (
+          <button key={q} onClick={() => { setQuestion(q); run(q); }} disabled={loading}
+            className="text-xs px-2.5 py-1 rounded-full border border-line text-[var(--color-muted)] hover:bg-[var(--color-canvas)] disabled:opacity-50">
+            {q}
+          </button>
+        ))}
+      </div>
+
+      <form onSubmit={(e) => { e.preventDefault(); run(question); }} className="flex gap-2">
+        <input className="input" value={question} onChange={(e) => setQuestion(e.target.value)}
+          placeholder="Ask something about this customer…" aria-label="Ask about this customer" />
+        <button type="submit" disabled={loading} className="btn btn-primary disabled:opacity-50">
+          {loading ? 'Thinking…' : 'Ask'}
+        </button>
+      </form>
+
+      {error && (
+        <div className="mt-3 rounded-lg px-3 py-2.5" style={{ background: 'var(--color-warning-soft)' }}>
+          <p className="text-sm font-medium" style={{ color: 'var(--color-warning)' }}>{error.message}</p>
+          <p className="t-meta mt-1">Everything else on this page is unaffected — it comes from your CRM data, not the AI service.</p>
+        </div>
+      )}
+
+      {summary && (
+        <div className="mt-3 text-sm text-ink whitespace-pre-wrap leading-relaxed">{summary}</div>
+      )}
+    </div>
+  );
+}
+
+
+// §23 — add a note directly from Customer 360, using the existing notes
+// API rather than a new endpoint.
+function NoteComposer({ accountId, onAdded }) {
+  const [body, setBody] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!body.trim()) return;
+    setSaving(true); setError('');
+    try {
+      await api.addNote('accounts', accountId, body.trim());
+      setBody('');
+      onAdded?.();
+    } catch (err) {
+      setError(friendlyError(err, 'Could not save the note.').message);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <form onSubmit={submit}>
+      <textarea className="input" rows={3} value={body} onChange={(e) => setBody(e.target.value)}
+        placeholder="Add a note about this customer…" aria-label="Add a note" />
+      {error && <p className="text-xs mt-1" style={{ color: 'var(--color-danger)' }}>{error}</p>}
+      <button type="submit" disabled={saving || !body.trim()} className="btn btn-primary mt-2 disabled:opacity-50">
+        <Plus className="w-4 h-4" /> {saving ? 'Saving…' : 'Add note'}
+      </button>
+    </form>
+  );
+}
+
 export default function Customer360() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -144,7 +239,11 @@ export default function Customer360() {
   );
 
   const { account, scoring, commercial, contacts, opportunities, quotations,
-          subscriptions, tickets, documents, tasks, timeline, attention } = data;
+          subscriptions, tickets, documents, tasks, timeline, attention,
+          relationship_map: relationshipMap = {}, next_best_actions: nextBest = [],
+          audit = [] } = data;
+  const primary = contacts[0];
+  const contactsPrimary = primary ? `${primary.first_name} ${primary.last_name || ''}`.trim() : null;
 
   return (
     <div className="max-w-[1600px] mx-auto">
@@ -154,8 +253,31 @@ export default function Customer360() {
 
       <PageHeader title={account.account_name}
         subtitle={[account.account_type, account.industry, account.city].filter(Boolean).join(' · ') || 'Customer 360'}>
-        <Link to={`/records/accounts/${id}`} className="btn btn-secondary">Open record</Link>
+        {account.phone && <a href={`tel:${account.phone}`} className="btn btn-secondary"><Phone className="w-4 h-4" /> Call</a>}
+        {account.email && <a href={`mailto:${account.email}`} className="btn btn-secondary"><Mail className="w-4 h-4" /> Email</a>}
+        {(account.whatsapp || account.phone) && (
+          <a href={`https://wa.me/${String(account.whatsapp || account.phone).replace(/\D/g, '')}`}
+            target="_blank" rel="noreferrer" className="btn btn-secondary">
+            <MessageCircle className="w-4 h-4" /> WhatsApp
+          </a>
+        )}
+        {account.website && (
+          <a href={/^https?:/.test(account.website) ? account.website : `https://${account.website}`}
+            target="_blank" rel="noreferrer" className="btn btn-secondary"><Globe className="w-4 h-4" /> Website</a>
+        )}
+        <Link to={`/records/accounts/${id}`} className="btn btn-primary"><Pencil className="w-4 h-4" /> Open record</Link>
       </PageHeader>
+
+      {(account.owner_id || contactsPrimary || account.phone || account.email) && (
+        <div className="card p-3 mb-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+          {contactsPrimary && (
+            <span className="t-meta">Primary contact <span className="text-ink font-medium">{contactsPrimary}</span></span>
+          )}
+          {account.phone && <span className="t-meta">Phone <span className="text-ink">{account.phone}</span></span>}
+          {account.email && <span className="t-meta">Email <span className="text-ink">{account.email}</span></span>}
+          {account.status && <span className="t-meta">Status <Badge status={account.status} size="xs">{account.status}</Badge></span>}
+        </div>
+      )}
 
       {attention.length > 0 && (
         <div className="card p-4 mb-4" style={{ borderColor: 'var(--color-warning)' }}>
@@ -186,6 +308,59 @@ export default function Customer360() {
         <KpiCard label="Collected" value={inr(commercial.paid_total)} icon={Wallet} tone="neutral" />
         <KpiCard label="Open quotes" value={commercial.open_quotes} icon={FileText} tone="warning" />
       </div>
+
+      <div className="grid lg:grid-cols-2 gap-4 mb-4">
+        <Section title="Next best action" icon={Target}>
+          {nextBest.length === 0 ? (
+            <p className="t-meta">Nothing needs attention right now.</p>
+          ) : (
+            <ol className="space-y-2">
+              {nextBest.map((a, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5"
+                    style={{ background: a.priority <= 2 ? 'var(--color-danger-soft)' : 'var(--color-neutral-soft)',
+                             color: a.priority <= 2 ? 'var(--color-danger)' : 'var(--color-neutral)' }}>{i + 1}</span>
+                  <div className="min-w-0">
+                    {a.link
+                      ? <Link to={a.link} className="text-sm text-ink font-medium hover:text-[var(--color-brand)]">{a.action}</Link>
+                      : <span className="text-sm text-ink font-medium">{a.action}</span>}
+                    <div className="t-meta">{a.reason}</div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </Section>
+
+        <AiSummaryPanel accountId={id} />
+      </div>
+
+      {Object.keys(relationshipMap).length > 0 && (
+        <div className="mb-4">
+          <Section title="Relationship map" icon={Network} count={contacts.length}>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {Object.entries(relationshipMap).map(([role, people]) => (
+                <div key={role}>
+                  <div className="t-meta font-semibold uppercase tracking-wide mb-1.5">{role}</div>
+                  <div className="space-y-1.5">
+                    {people.map((c) => (
+                      <Link key={c.id} to={`/records/contacts/${c.id}`} className="flex items-center gap-2 group">
+                        <Avatar name={`${c.first_name} ${c.last_name || ''}`} size="sm" />
+                        <div className="min-w-0">
+                          <div className="text-sm text-ink truncate group-hover:text-[var(--color-brand)]">
+                            {c.first_name} {c.last_name}
+                          </div>
+                          <div className="t-meta truncate">{c.job_title || '—'}</div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-2 gap-4">
         <Section title="Contacts" icon={UsersIcon} count={contacts.length}>
@@ -307,7 +482,33 @@ export default function Customer360() {
                   <span className="text-sm text-ink truncate">{d.title}</span>
                   {d.external_url
                     ? <a href={d.external_url} target="_blank" rel="noreferrer" className="text-xs text-[var(--color-brand)] shrink-0">Open</a>
-                    : <a href={api.documentDownloadUrl(d.id)} className="text-xs text-[var(--color-brand)] shrink-0">Download</a>}
+                    : <button onClick={() => api.downloadDocument(d.id, d.file_name).catch((e) => alert(e.message))}
+                        className="text-xs text-[var(--color-brand)] shrink-0">Download</button>}
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+
+        <Section title="Notes" icon={StickyNote}>
+          <NoteComposer accountId={id} onAdded={load} />
+        </Section>
+
+        <Section title="Audit history" icon={History} count={audit.length}>
+          {audit.length === 0 ? <p className="t-meta">No changes recorded yet.</p> : (
+            <div className="space-y-2 max-h-[300px] overflow-y-auto thin-scroll">
+              {audit.map((a, i) => (
+                <div key={i} className="text-sm">
+                  <span className="text-ink">
+                    {a.user_name || 'Someone'}{' '}
+                    {a.action === 'created' ? 'created this account'
+                      : a.action === 'field_changed' ? <>changed <span className="font-medium">{a.field_api_name}</span></>
+                      : a.action}
+                  </span>
+                  {a.action === 'field_changed' && (
+                    <span className="t-meta"> — <span className="line-through opacity-60">{a.old_value || 'empty'}</span> → {a.new_value || 'empty'}</span>
+                  )}
+                  <div className="t-meta">{a.created_at}</div>
                 </div>
               ))}
             </div>

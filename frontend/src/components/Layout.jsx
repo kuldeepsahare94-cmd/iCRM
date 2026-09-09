@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users as UsersIcon, Wallet, BarChart3, Settings as SettingsIcon,
-  LogOut, UserCog, ShieldCheck, Palette, Menu, X, MessageCircle, Radio, ChevronRight, PhoneCall,
+  LogOut, UserCog, ShieldCheck, Palette, Menu, X, MessageCircle, Radio, ChevronRight, PhoneCall, Inbox, Megaphone,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
@@ -18,6 +18,8 @@ import { Avatar } from './ui';
 const links = [
   { to: '/', label: 'Dashboard', end: true, icon: LayoutDashboard },
   { to: '/leads', label: 'Leads', icon: UsersIcon },
+  { to: '/inbox', label: 'Inbox', icon: Inbox },
+  { to: '/email-campaigns', label: 'Email Campaigns', icon: Megaphone },
   { to: '/payments', label: 'Payments', icon: Wallet },
 ];
 

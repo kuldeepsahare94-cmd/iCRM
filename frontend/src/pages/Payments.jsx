@@ -111,6 +111,15 @@ function NewPaymentModal({ onClose, onSaved }) {
 }
 
 export default function Payments() {
+  const [downloadError, setDownloadError] = useState('');
+  // Downloads now go through fetch (they need the auth header), so a
+  // failure is a real rejected promise — surface it instead of letting
+  // the click appear to do nothing.
+  const grab = async (fn) => {
+    setDownloadError('');
+    try { await fn(); } catch (e) { setDownloadError(e.message); }
+  };
+
   const { id } = useParams();
   const navigate = useNavigate();
   const can = usePermissions();
@@ -159,6 +168,11 @@ export default function Payments() {
         </div>
       </div>
 
+      {downloadError && (
+        <div className="text-sm rounded-lg px-3 py-2 mt-4"
+          style={{ background: 'var(--color-danger-soft)', color: 'var(--color-danger)' }}>{downloadError}</div>
+      )}
+
       <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-line rounded-lg px-3 py-2 text-sm mt-5">
         <option value="">All statuses</option>
         {STATUSES.map((s) => <option key={s}>{s}</option>)}
@@ -197,12 +211,14 @@ export default function Payments() {
                   )}
                   {p.status === 'Paid' && (
                     <>
-                      <a href={api.receiptUrl(p.id, 'A')} target="_blank" rel="noreferrer" className="text-xs text-slate-500 hover:text-ink inline-flex items-center gap-1 mr-2">
+                      <button onClick={() => grab(() => api.downloadReceipt(p.id, 'A'))}
+                        className="text-xs text-slate-500 hover:text-ink inline-flex items-center gap-1 mr-2">
                         <Download className="w-3 h-3" /> Receipt A
-                      </a>
-                      <a href={api.receiptUrl(p.id, 'B')} target="_blank" rel="noreferrer" className="text-xs text-slate-500 hover:text-ink inline-flex items-center gap-1">
+                      </button>
+                      <button onClick={() => grab(() => api.downloadReceipt(p.id, 'B'))}
+                        className="text-xs text-slate-500 hover:text-ink inline-flex items-center gap-1">
                         <Download className="w-3 h-3" /> Receipt B
-                      </a>
+                      </button>
                     </>
                   )}
                 </td>

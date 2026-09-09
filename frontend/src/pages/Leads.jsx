@@ -9,6 +9,7 @@ import { usePermissions } from '../context/usePermissions';
 import { downloadCSV } from '../utils/csv';
 import {
   PageHeader, KpiCard, Badge, Avatar, SkeletonRows, SkeletonCards, ErrorState, EmptyState, toneFor,
+  friendlyError,
 } from '../components/ui';
 
 // The application's real lead statuses — unchanged, so nothing
@@ -58,7 +59,26 @@ const empty = {
   assigned_counselor: '', remarks: '', lead_rating: '', product_interest: '',
 };
 
-function LeadCard({ lead }) {
+function LeadCard({ lead, onMoved, canEdit }) {
+  const [moving, setMoving] = useState(false);
+  const [moveError, setMoveError] = useState('');
+
+  const move = async (e, next) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!next || next === lead.status) return;
+    setMoving(true); setMoveError('');
+    try {
+      await api.updateLead(lead.id, { ...lead, status: next });
+      onMoved?.();
+    } catch (err) {
+      setMoveError(friendlyError(err, 'Could not move this lead.').message);
+    } finally { setMoving(false); }
+  };
+  return <LeadCardBody lead={lead} canEdit={canEdit} moving={moving} moveError={moveError} onMove={move} />;
+}
+
+function LeadCardBody({ lead, canEdit, moving, moveError, onMove }) {
   const followUp = lead.follow_up_date ? String(lead.follow_up_date).slice(0, 10) : null;
   const isToday = followUp === new Date().toISOString().slice(0, 10);
   return (
@@ -85,6 +105,18 @@ function LeadCard({ lead }) {
           </div>
         )}
       </div>
+      {canEdit && (
+        <div className="mt-2" onClick={(e) => e.preventDefault()}>
+          <select value={lead.status || ''} disabled={moving}
+            onChange={(e) => onMove(e, e.target.value)}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            aria-label={`Move ${lead.student_name} to another status`}
+            className="w-full text-[11px] border border-line rounded-md px-1.5 py-1 bg-white text-[var(--color-muted)] disabled:opacity-50">
+            {STATUSES.map((st) => <option key={st} value={st}>{moving ? 'Moving…' : `Move to ${st}`}</option>)}
+          </select>
+          {moveError && <p className="text-[10px] mt-1" style={{ color: 'var(--color-danger)' }}>{moveError}</p>}
+        </div>
+      )}
       <div className="mt-2 pt-2 border-t border-line flex items-center justify-between gap-2">
         <span className="t-meta truncate">{lead.source || '—'}</span>
         {followUp ? (
@@ -100,7 +132,7 @@ function LeadCard({ lead }) {
   );
 }
 
-function KanbanBoard({ leads, onAdd, canCreate }) {
+function KanbanBoard({ leads, onAdd, canCreate, canEdit, onMoved }) {
   const byStatus = useMemo(() => {
     const map = Object.fromEntries(STATUSES.map((s) => [s, []]));
     leads.forEach((l) => {
@@ -135,7 +167,7 @@ function KanbanBoard({ leads, onAdd, canCreate }) {
             </header>
 
             <div className="px-2 pb-2 space-y-2 overflow-y-auto thin-scroll flex-1">
-              {items.map((l) => <LeadCard key={l.id} lead={l} />)}
+              {items.map((l) => <LeadCard key={l.id} lead={l} canEdit={canEdit} onMoved={onMoved} />)}
               {items.length === 0 && (
                 <p className="text-[11px] text-center py-6 opacity-60" style={{ color: solid }}>No leads</p>
               )}
@@ -398,7 +430,8 @@ export default function Leads() {
       )}
 
       {!loading && !error && filtered.length > 0 && view === 'kanban' && (
-        <KanbanBoard leads={filtered} onAdd={setAddFor} canCreate={can('leads', 'create')} />
+        <KanbanBoard leads={filtered} onAdd={setAddFor} canCreate={can('leads', 'create')}
+          canEdit={can('leads', 'edit')} onMoved={load} />
       )}
 
       {!loading && !error && filtered.length > 0 && view === 'list' && (

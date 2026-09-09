@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Users, TrendingUp, CalendarClock, IndianRupee, Target, LifeBuoy, PhoneCall, Repeat, AlertTriangle, Sparkles } from 'lucide-react';
+import { Users, TrendingUp, CalendarClock, IndianRupee, Target, LifeBuoy, PhoneCall, Repeat, AlertTriangle, Sparkles, CheckCircle2, XCircle } from 'lucide-react';
 import { api } from '../api';
-import { friendlyError } from '../components/ui';
+import { friendlyError, Badge } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 
 const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
@@ -51,6 +51,38 @@ const RELATED_LABEL = { leads: 'Lead', accounts: 'Account', contacts: 'Contact',
 // functionality stays exactly where it was for anyone who re-enables those
 // modules, while the CRM view is what a universal-CRM user actually needs
 // day to day.
+
+// A compact "what's on today" list. Shows a real empty message rather than
+// an blank box — the brief calls out intentional empty states.
+function AgendaCard({ title, icon: Icon, items, render, empty }) {
+  const list = items || [];
+  return (
+    <div className="card p-4">
+      <h3 className="t-section flex items-center gap-2 mb-3">
+        {Icon && <Icon className="w-4 h-4 text-[var(--color-muted)]" />}
+        {title}
+        {list.length > 0 && <span className="t-meta">({list.length})</span>}
+      </h3>
+      {list.length === 0 ? <p className="t-meta">{empty}</p> : (
+        <div className="space-y-1.5">
+          {list.map((item, i) => {
+            const r = render(item);
+            const body = (
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <span className="text-sm text-ink truncate">{r.title}</span>
+                {r.meta && <span className="t-meta shrink-0">{r.meta}</span>}
+              </div>
+            );
+            return r.to
+              ? <Link key={i} to={r.to} className="block p-1.5 -mx-1.5 rounded-lg hover:bg-[var(--color-canvas)]">{body}</Link>
+              : <div key={i} className="p-1.5 -mx-1.5">{body}</div>;
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AskAiWidget() {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
@@ -92,6 +124,54 @@ function CrmDashboardSection({ data }) {
   const c = data.cards;
   return (
     <>
+      {data.attention?.length > 0 && (
+        <div className="card p-4 mt-5" style={{ borderColor: 'var(--color-warning)' }}>
+          <h2 className="t-section flex items-center gap-2 mb-2">
+            <AlertTriangle className="w-4 h-4" style={{ color: 'var(--color-warning)' }} /> Needs attention
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {data.attention.map((a, i) => (
+              <Link key={i} to={a.link || '#'}
+                className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border border-line hover:bg-[var(--color-canvas)]">
+                <Badge tone={a.severity === 'high' ? 'danger' : 'warning'} size="xs">{a.severity}</Badge>
+                <span className="text-ink">{a.text}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <SectionLabel>Today</SectionLabel>
+      <div className="grid md:grid-cols-3 gap-4">
+        <AgendaCard title="Follow-ups due" icon={CalendarClock} items={data.agenda?.follow_ups}
+          render={(f) => ({ title: f.title, meta: f.mobile || f.status, to: `/leads/${f.id}` })}
+          empty="No follow-ups scheduled for today." />
+        <AgendaCard title="Meetings today" icon={Users} items={data.agenda?.meetings}
+          render={(m) => ({ title: m.title, meta: m.start_datetime ? String(m.start_datetime).slice(11, 16) : '',
+                            to: m.related_module ? `/records/${m.related_module}/${m.related_record_id}` : null })}
+          empty="Nothing in the diary today." />
+        <AgendaCard title="Tasks due" icon={AlertTriangle} items={data.agenda?.tasks_due}
+          render={(t) => ({ title: t.title, meta: t.priority, to: null })}
+          empty="No tasks due." />
+      </div>
+
+      {data.performance && (
+        <>
+          <SectionLabel>Performance</SectionLabel>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <KpiCard label="Deals won" value={data.performance.won} icon={CheckCircle2} tone="success" />
+            <KpiCard label="Deals lost" value={data.performance.lost} icon={XCircle} tone="danger" />
+            <KpiCard label="Win rate"
+              value={data.performance.win_rate === null ? '—' : `${data.performance.win_rate}%`}
+              icon={TrendingUp} tone={data.performance.win_rate === null ? 'neutral' : 'special'} />
+            <KpiCard label="Avg deal size" value={inr(data.performance.avg_deal_size)} icon={IndianRupee} tone="info" />
+          </div>
+          {data.performance.win_rate === null && (
+            <p className="t-meta mt-2">No deals have closed yet, so a win rate can't be calculated.</p>
+          )}
+        </>
+      )}
+
       <SectionLabel>Pipeline</SectionLabel>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Leads" value={c.total_leads} icon={Users} color={COLORS.amber} to="/leads" />

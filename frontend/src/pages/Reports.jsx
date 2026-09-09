@@ -4,24 +4,24 @@ import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
 import { downloadCSV } from '../utils/csv';
 
+// Only reports that make sense for a general B2B CRM. The education-era
+// reports (students, admissions, course-wise, placements, interviews,
+// fee collection) were removed from this list because those modules no
+// longer exist in the product — §25.
+//
+// Their backend endpoints and underlying tables are deliberately left in
+// place: hiding a report from the UI must not delete anyone's historical
+// data. Anyone who needs that history can still reach it via the API.
 const REPORTS = [
   { key: 'leads', label: 'Lead Report', fetch: (p) => api.reportLeads(p), dated: true },
-  { key: 'students', label: 'Student Report', fetch: (p) => api.reportStudents(p), dated: true },
-  { key: 'admissions', label: 'Admission Report', fetch: (p) => api.reportAdmissions(p), dated: true },
-  { key: 'course-wise-admissions', label: 'Course-wise Admission Report', fetch: () => api.reportCourseWiseAdmissions() },
-  { key: 'fee-collection', label: 'Fee Collection Report', fetch: (p) => api.reportFeeCollection(p), dated: true },
-  { key: 'pending-fees', label: 'Pending Fee Report', fetch: () => api.reportPendingFees() },
   { key: 'payments', label: 'Payment Report', fetch: (p) => api.reportPayments(p), dated: true },
-  { key: 'placements', label: 'Placement Report', fetch: (p) => api.reportPlacements(p), dated: true },
-  { key: 'interviews', label: 'Interview Report', fetch: (p) => api.reportInterviews(p), dated: true },
-  { key: 'companies', label: 'Company Report', fetch: () => api.reportCompanies() },
   { key: 'revenue', label: 'Revenue Report', fetch: (p) => api.reportRevenue(p), dated: true },
-  { key: 'monthly-admissions', label: 'Monthly Admission Report', fetch: () => api.reportMonthlyAdmissions() },
   { key: 'monthly-collection', label: 'Monthly Collection Report', fetch: () => api.reportMonthlyCollection() },
 ];
 
 // Columns we never want to show raw in a generic table (ids used only for linking/filtering)
-const HIDE_COLS = new Set(['id', 'student_id', 'admission_id', 'course_id', 'company_id', 'lead_id', 'interested_course_id']);
+const HIDE_COLS = new Set(['id', 'lead_id', 'account_id', 'contact_id', 'opportunity_id',
+  'student_id', 'admission_id', 'course_id', 'company_id', 'interested_course_id']);
 const STATUS_COLS = new Set(['status', 'admission_status', 'admission_stage', 'interview_status', 'result']);
 
 function titleCase(s) {

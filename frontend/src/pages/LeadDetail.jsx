@@ -89,7 +89,7 @@ export default function LeadDetail() {
 
   const stageIndex = FUNNEL_STAGES.indexOf(lead.status);
   const isTerminalOther = lead.status === 'Not Interested' || lead.status === 'Dropped';
-  const tags = [lead.source, lead.city, lead.interested_course_name].filter(Boolean);
+  const tags = [lead.source, lead.city, lead.product_interest].filter(Boolean);
   const followUpActive = lead.follow_up_date && !['Converted', 'Dropped', 'Not Interested'].includes(lead.status);
   const filteredActivities = tab === 'all' ? lead.activities : lead.activities.filter((a) => a.type === tab);
 
@@ -114,7 +114,7 @@ export default function LeadDetail() {
                 <StatusBadge status={lead.status} />
               </div>
               <p className="text-amber-50 text-xs mt-1">
-                {lead.mobile && <>📞 {lead.mobile}</>}{lead.city && <> · {lead.city}</>}{lead.interested_course_name && <> · 🎓 {lead.interested_course_name}</>}
+                {lead.mobile && <>📞 {lead.mobile}</>}{lead.city && <> · {lead.city}</>}{lead.product_interest && <> · {lead.product_interest}</>}
               </p>
               {tags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
