@@ -8,6 +8,7 @@ import { friendlyError } from '../../components/ui';
 import { getFieldValue, formatFieldValue, FieldInput, recordTitle } from './fieldUtils';
 import { computeFollowupStatus, findFollowupField } from './followupUtils';
 import AddRelatedModal, { canCreateRelation, relationTargetModule } from './AddRelatedModal';
+import QuotationItemsPanel from './QuotationItemsPanel';
 
 // Any array-of-objects the dedicated module route embeds in its detail
 // response (e.g. Accounts embeds contacts/opportunities/quotations/...) is
@@ -587,6 +588,13 @@ export default function UniversalDetail() {
           )}
         </div>
       </div>
+
+      {module.api_name === 'quotations' && (
+        <div className="mb-5">
+          <QuotationItemsPanel quotationId={id} currency={record.currency}
+            canEdit={can('quotations', 'edit')} onSaved={load} />
+        </div>
+      )}
 
       {module.api_name === 'quotations' && <QuotationActionsPanel recordId={id} record={record} onUpdated={load} />}
 

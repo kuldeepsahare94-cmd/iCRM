@@ -98,7 +98,17 @@ async function req(method, path, body) {
 
   if (res.status === 204) return null;
   const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.error || res.statusText);
+  if (!res.ok) {
+    // Attach the full error payload, not just its message. Some endpoints
+    // (email test-send) return a request_id and the raw underlying error
+    // alongside the friendly one specifically so a failure can be diagnosed
+    // without needing hosting-dashboard access — discarding everything but
+    // .error would throw that away.
+    const err = new Error(data?.error || res.statusText);
+    err.requestId = data?.request_id;
+    err.rawError = data?.raw_error;
+    throw err;
+  }
   return data;
 }
 
@@ -352,6 +362,7 @@ export const api = {
   getOrgEmail: () => req('GET', '/email-settings/org'),
   saveOrgEmail: (body) => req('PUT', '/email-settings/org', body),
   getMyEmail: () => req('GET', '/email-settings/me'),
+  emailDiagnostics: (params) => req('GET', '/email-settings/diagnostics' + qs(params)),
   saveMyEmail: (body) => req('PUT', '/email-settings/me', body),
   testEmail: (scope) => req('POST', '/email-settings/test', { scope }),
 

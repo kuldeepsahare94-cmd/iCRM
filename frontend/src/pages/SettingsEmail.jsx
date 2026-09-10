@@ -3,6 +3,7 @@ import { Mail, CheckCircle2, AlertTriangle, Send, Info } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 import { PageHeader, Badge, friendlyError } from '../components/ui';
+import { History } from 'lucide-react';
 
 // Presets for the mail services most people actually use, so nobody has to
 // go hunting for port numbers.
@@ -51,10 +52,19 @@ function AccountForm({ scope, initial, onSaved, canEdit }) {
     setTesting(true); setMsg(null);
     try {
       const r = await api.testEmail(scope);
-      setMsg({ ok: true, text: `Test email sent to ${r.sent_to}. Check that inbox.` });
+      setMsg({ ok: true, text: `Test email sent to ${r.sent_to}. Check that inbox. (id ${r.request_id})` });
       onSaved?.();
     } catch (err) {
-      setMsg({ ok: false, text: friendlyError(err, 'The test failed.').message });
+      // The request_id ties this exact failure to a row in the diagnostic
+      // log below, and the raw error is the actual cause — not a guess at
+      // one. Both are worth more than a translated sentence when something
+      // needs debugging rather than just explaining.
+      setMsg({
+        ok: false,
+        text: friendlyError(err, 'The test failed.').message,
+        requestId: err.requestId,
+        raw: err.rawError,
+      });
     } finally { setTesting(false); }
   };
 
@@ -119,6 +129,13 @@ function AccountForm({ scope, initial, onSaved, canEdit }) {
           style={{ background: msg.ok ? 'var(--color-success-soft)' : 'var(--color-danger-soft)',
                    color: msg.ok ? 'var(--color-success)' : 'var(--color-danger)' }}>
           {msg.text}
+          {msg.requestId && <div className="text-xs opacity-70 mt-1">Diagnostic id: {msg.requestId}</div>}
+          {msg.raw && (
+            <details className="mt-1.5">
+              <summary className="text-xs cursor-pointer opacity-80">Technical detail (for debugging)</summary>
+              <pre className="text-xs mt-1 whitespace-pre-wrap opacity-80">{msg.raw.code ? `[${msg.raw.code}] ` : ''}{msg.raw.message}</pre>
+            </details>
+          )}
         </div>
       )}
 
@@ -133,6 +150,67 @@ function AccountForm({ scope, initial, onSaved, canEdit }) {
         </div>
       )}
     </form>
+  );
+}
+
+
+// The actual answer to "did the fix work" — every send attempt, the raw
+// error behind each failure, and how long it took, without needing hosting-
+// dashboard access.
+function DiagnosticsPanel() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = () => api.emailDiagnostics({ limit: 30 }).then(setRows).catch(() => setRows([])).finally(() => setLoading(false));
+  useEffect(() => { load(); }, []);
+
+  if (loading) return null;
+
+  return (
+    <div className="card p-5 mt-5">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="t-section flex items-center gap-1.5"><History className="w-4 h-4 text-amber" /> Recent send attempts</h2>
+        <button onClick={load} className="text-xs text-[var(--color-brand)]">Refresh</button>
+      </div>
+      <p className="t-meta mb-3">Every test, campaign send and reply attempt, with the real error behind any failure.</p>
+
+      {rows.length === 0 ? (
+        <p className="t-meta">Nothing logged yet — run a test send above.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left border-b border-line">
+                <th className="py-1.5 pr-3 t-meta font-semibold">When</th>
+                <th className="py-1.5 pr-3 t-meta font-semibold">Kind</th>
+                <th className="py-1.5 pr-3 t-meta font-semibold">To</th>
+                <th className="py-1.5 pr-3 t-meta font-semibold">Result</th>
+                <th className="py-1.5 pr-3 t-meta font-semibold">Time</th>
+                <th className="py-1.5 t-meta font-semibold">Raw error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-b border-line/60 align-top">
+                  <td className="py-1.5 pr-3 whitespace-nowrap">{r.created_at}</td>
+                  <td className="py-1.5 pr-3">{r.kind.replace('_', ' ')}</td>
+                  <td className="py-1.5 pr-3">{r.to_address || '—'}</td>
+                  <td className="py-1.5 pr-3">
+                    <Badge tone={r.outcome === 'success' ? 'success' : 'danger'} size="xs">{r.outcome}</Badge>
+                  </td>
+                  <td className="py-1.5 pr-3 whitespace-nowrap">{r.duration_ms ? `${(r.duration_ms / 1000).toFixed(1)}s` : '—'}</td>
+                  <td className="py-1.5 max-w-xs">
+                    {r.error_message ? (
+                      <span className="text-[var(--color-danger)]">{r.error_code ? `[${r.error_code}] ` : ''}{r.error_message}</span>
+                    ) : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -199,6 +277,8 @@ export default function SettingsEmail() {
         <AccountForm scope={tab} initial={tab === 'org' ? org : mine}
           canEdit={tab === 'org' ? isAdmin : true} onSaved={load} />
       </div>
+
+      <DiagnosticsPanel />
 
       <div className="card p-4 mt-5" style={{ borderColor: 'var(--color-warning)' }}>
         <h2 className="t-section flex items-center gap-2 mb-1">
