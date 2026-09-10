@@ -19,6 +19,7 @@ require('./db-phase27-call-disposition');
 require('./db-phase28-email-accounts');
 require('./db-phase29-inbound-email');
 require('./db-phase30-email-campaigns');
+require('./db-phase31-email-diagnostics');
 
 const app = express();
 

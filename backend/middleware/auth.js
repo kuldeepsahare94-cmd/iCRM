@@ -24,8 +24,23 @@ function requireAuth(req, res, next) {
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Not logged in' });
 
+  // Only a genuine token problem is a 401. Previously this whole block was
+  // wrapped in one try/catch that reported EVERY failure as "Session expired,
+  // please log in again" — so a transient database error while loading the
+  // user or their permissions silently logged people out and sent them back
+  // to the login screen, with a message that pointed at entirely the wrong
+  // cause.
+  let payload;
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    payload = jwt.verify(token, JWT_SECRET);
+  } catch (e) {
+    const expired = e && e.name === 'TokenExpiredError';
+    return res.status(401).json({
+      error: expired ? 'Session expired, please log in again' : 'Your sign-in could not be verified. Please log in again.',
+    });
+  }
+
+  try {
     const user = db.prepare(`
       SELECT u.id, u.username, u.full_name, u.active, u.role_id, r.name AS role_name
       FROM users u LEFT JOIN roles r ON r.id = u.role_id
@@ -36,7 +51,10 @@ function requireAuth(req, res, next) {
     req.user = user;
     next();
   } catch (e) {
-    return res.status(401).json({ error: 'Session expired, please log in again' });
+    // A server-side fault, not an authentication failure. Reporting 500 keeps
+    // the user signed in and tells them something true.
+    console.error('[auth] failed to load user/permissions:', e);
+    return res.status(500).json({ error: 'Could not verify your account right now. Please try again.' });
   }
 }
 
