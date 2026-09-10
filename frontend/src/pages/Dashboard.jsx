@@ -26,29 +26,31 @@ const COLORS = {
   rose: { bar: '#F43F5E', chipBg: '#FFE4E6', chipText: '#BE123C' },
   violet: { bar: '#8B5CF6', chipBg: '#EDE9FE', chipText: '#6D28D9' },
 };
+// Fixed stage-colour palette used only when a pipeline stage has no colour
+// configured in Settings — matches the reference donut's blue/pink/purple/
+// teal/amber sequence.
+const STAGE_FALLBACK = ['#3B82F6', '#EC4899', '#8B5CF6', '#14B8A6', '#F59E0B', '#10B981', '#F43F5E'];
 const TONE_TO_COLOR = { success: 'emerald', danger: 'rose', warning: 'amber', info: 'blue', special: 'indigo', neutral: 'teal' };
 
 function KpiCard({ label, value, sub, trend, icon: Icon, color, tone, to }) {
   const palette = color || COLORS[TONE_TO_COLOR[tone]] || COLORS.indigo;
   const body = (
-    <div className="relative bg-white border border-line rounded-2xl p-5 hover:shadow-md hover:-translate-y-0.5 transition-all h-full overflow-hidden">
-      <div className="flex items-start justify-between">
-        <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: palette.chipBg, color: palette.chipText }}>
-          {Icon && <Icon className="w-5 h-5" />}
-        </div>
-        {trend && (
-          <span className="text-xs font-semibold flex items-center gap-0.5"
-            style={{ color: trend.dir === 'down' ? 'var(--color-danger)' : 'var(--color-success)' }}>
-            {trend.dir === 'down' ? '↓' : '↑'} {trend.text}
-          </span>
-        )}
+    <div className="relative bg-white border border-line rounded-2xl p-5 hover:shadow-md hover:-translate-y-0.5 transition-all h-full">
+      <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 mb-4"
+        style={{ background: palette.chipBg, color: palette.chipText }}>
+        {Icon && <Icon className="w-5 h-5" />}
       </div>
-      <div className="text-xs text-slate-500 font-medium mt-3">{label}</div>
-      <div className="font-display text-2xl font-bold text-ink mt-0.5" style={{ fontFamily: 'var(--font-display)' }}>
+      <div className="text-[13px] text-slate-500 font-medium">{label}</div>
+      <div className="text-[26px] font-bold text-ink mt-1 leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
         {value}
       </div>
-      {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
+      {(trend || sub) && (
+        <div className="mt-1.5 text-xs font-medium flex items-center gap-1"
+          style={{ color: trend ? (trend.dir === 'down' ? 'var(--color-danger)' : 'var(--color-success)') : 'var(--color-faint)' }}>
+          {trend && <span>{trend.dir === 'down' ? '↓' : '↑'} {trend.text}</span>}
+          {!trend && sub && <span className="text-slate-400">{sub}</span>}
+        </div>
+      )}
     </div>
   );
   return to ? <Link to={to} className="block h-full">{body}</Link> : body;
@@ -124,37 +126,39 @@ function AgendaCard({ title, icon: Icon, items, render, empty, action }) {
 function StageDonut({ stages }) {
   const total = stages.reduce((s, x) => s + (x.c || 0), 0);
   const data = stages.filter((s) => s.c > 0);
+  const colourOf = (s, i) => s.color || STAGE_FALLBACK[i % STAGE_FALLBACK.length];
   return (
     <div className="flex items-center gap-6 flex-wrap">
-      <div className="relative w-40 h-40 shrink-0">
+      <div className="relative w-[168px] h-[168px] shrink-0">
         {total === 0 ? (
-          <div className="w-40 h-40 rounded-full border-8 border-[var(--color-line)] flex items-center justify-center">
+          <div className="w-[168px] h-[168px] rounded-full border-[10px] border-[var(--color-line)] flex items-center justify-center">
             <span className="t-meta">No deals</span>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={data} dataKey="c" nameKey="stage" innerRadius={52} outerRadius={78} paddingAngle={2} strokeWidth={0}>
-                {data.map((s, i) => <Cell key={i} fill={s.color || '#6366F1'} />)}
+              <Pie data={data} dataKey="c" nameKey="stage" innerRadius={56} outerRadius={82} paddingAngle={3} strokeWidth={0} cornerRadius={4}>
+                {data.map((s, i) => <Cell key={i} fill={colourOf(s, i)} />)}
               </Pie>
-              <Tooltip formatter={(v, n, p) => [`${v} deal(s) · ${inr(p.payload.total)}`, p.payload.stage]} />
+              <Tooltip formatter={(v, n, p) => [`${v} deal(s) · ${inr(p.payload.total)}`, p.payload.stage]}
+                contentStyle={{ borderRadius: 10, border: '1px solid var(--color-line)', fontSize: 12 }} />
             </PieChart>
           </ResponsiveContainer>
         )}
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-2xl font-bold text-ink">{total}</span>
-          <span className="t-meta">Total Deals</span>
+          <span className="text-[28px] font-bold text-ink leading-none">{total}</span>
+          <span className="t-meta mt-1">Total Leads</span>
         </div>
       </div>
-      <div className="flex-1 min-w-[160px] space-y-2">
-        {stages.map((s) => (
+      <div className="flex-1 min-w-[170px] space-y-2.5">
+        {stages.map((s, i) => (
           <div key={s.stage} className="flex items-center justify-between text-sm gap-2">
             <span className="flex items-center gap-2 min-w-0">
-              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: s.color || '#6366F1' }} />
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: colourOf(s, i) }} />
               <span className="text-ink truncate">{s.stage}</span>
             </span>
-            <span className="text-[var(--color-muted)] shrink-0">
-              {s.c} {total > 0 && <span className="text-xs">({Math.round((s.c / total) * 100)}%)</span>}
+            <span className="text-[var(--color-muted)] shrink-0 font-medium">
+              {s.c} {total > 0 && <span className="text-xs font-normal">({Math.round((s.c / total) * 100)}%)</span>}
             </span>
           </div>
         ))}
@@ -234,13 +238,14 @@ function CrmDashboardSection({ data }) {
   return (
     <>
       {data.attention?.length > 0 && (
-        <div className="rounded-xl p-4 mt-5 flex items-center gap-3 flex-wrap"
-          style={{ background: 'var(--color-warning-soft)', borderLeft: '4px solid var(--color-warning)' }}>
-          <AlertTriangle className="w-5 h-5 shrink-0" style={{ color: 'var(--color-warning)' }} />
-          <span className="text-sm font-semibold text-ink shrink-0">Needs attention</span>
+        <div className="rounded-2xl p-4 mt-5 flex items-center gap-3 flex-wrap" style={{ background: '#FFF8EC' }}>
+          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: '#FDECC8' }}>
+            <AlertTriangle className="w-4 h-4" style={{ color: '#B45309' }} />
+          </div>
+          <span className="text-sm font-bold text-ink shrink-0">Needs attention</span>
           <div className="flex flex-wrap gap-2 flex-1 min-w-0">
             {data.attention.map((a, i) => (
-              <span key={i} className="inline-flex items-center gap-1.5 text-xs bg-white px-2.5 py-1 rounded-full border border-line">
+              <span key={i} className="inline-flex items-center gap-2 text-xs bg-white px-3 py-1.5 rounded-full">
                 <Badge tone={a.severity === 'high' ? 'danger' : 'warning'} size="xs">{a.severity}</Badge>
                 <span className="text-ink">{a.text}</span>
               </span>
@@ -263,7 +268,7 @@ function CrmDashboardSection({ data }) {
 
       <div className="grid md:grid-cols-3 gap-4 mt-8">
         <AgendaCard title="Follow-ups due today" icon={CalendarClock} items={data.agenda?.follow_ups}
-          render={(f) => ({ title: f.title, phone: f.mobile, meta: f.status, to: `/leads/${f.id}` })}
+          render={(f) => ({ title: f.title, phone: f.mobile, meta: f.mobile || f.status, to: `/leads/${f.id}` })}
           empty="No follow-ups scheduled for today."
           action={data.agenda?.follow_ups?.length > 0 && <Link to="/leads" className="text-xs font-medium" style={{ color: 'var(--color-brand)' }}>View all →</Link>} />
         <AgendaCard title="Meetings today" icon={Users}
@@ -371,6 +376,16 @@ export default function Dashboard() {
     <div className="max-w-[1600px] mx-auto">
       <div className="rounded-2xl p-6 mb-2 relative overflow-hidden"
         style={{ background: 'linear-gradient(135deg, var(--color-brand-soft), #FFFFFF)' }}>
+        {/* Small decorative "goal" illustration — mirrors the reference's
+            mountain-and-flag motif. Purely visual, no data. */}
+        <svg aria-hidden="true" viewBox="0 0 160 90" className="hidden md:block absolute top-2 right-[220px] w-40 h-24 opacity-90">
+          <path d="M0 90 L45 25 L65 50 L95 10 L160 90 Z" fill="var(--color-brand-soft)" />
+          <path d="M55 90 L95 10 L135 90 Z" fill="#C7D2FE" />
+          <path d="M85 22 L95 10 L105 22 Z" fill="#818CF8" />
+          <rect x="94" y="4" width="1.6" height="20" fill="#4338CA" />
+          <path d="M95.6 4 L110 9 L95.6 14 Z" fill="#4F46E5" />
+        </svg>
+
         <div className="relative flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="font-display text-2xl font-bold text-ink" style={{ fontFamily: 'var(--font-display)' }}>
@@ -378,9 +393,17 @@ export default function Dashboard() {
             </h1>
             <p className="text-[var(--color-muted)] text-sm mt-1">Here's what's happening with your CRM today.</p>
           </div>
-          <div className="flex items-center gap-2 bg-white border border-line rounded-xl px-3 py-2 shrink-0">
-            <CalendarClock className="w-4 h-4 text-[var(--color-brand)]" />
-            <span className="text-sm text-ink font-medium">{today}</span>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="hidden lg:block text-right max-w-[220px]">
+              <p className="text-xs text-[var(--color-muted)] italic leading-snug">
+                "Small steps today, big results tomorrow."
+              </p>
+            </div>
+            <div className="flex items-center gap-2 bg-white border border-line rounded-xl px-3 py-2 shrink-0">
+              <CalendarClock className="w-4 h-4 text-[var(--color-brand)]" />
+              <span className="text-sm text-ink font-medium">{today}</span>
+            </div>
           </div>
         </div>
       </div>

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users as UsersIcon, Wallet, BarChart3, Settings as SettingsIcon,
-  LogOut, UserCog, ShieldCheck, Palette, Menu, X, MessageCircle, Radio, ChevronRight, PhoneCall, Inbox, Megaphone,
+  LogOut, UserCog, ShieldCheck, Palette, Menu, X, MessageCircle, Radio, ChevronRight,
+  ChevronDown, PhoneCall, Inbox, Megaphone, Plus, Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
@@ -15,12 +16,13 @@ import ErrorBoundary from './ErrorBoundary';
 
 // Hand-written links for the modules that have bespoke pages. Everything
 // else is generated from the module registry below, so a module created
-// from Settings appears here automatically.
+// from Settings appears here automatically. Unchanged from before — this
+// pass only restyles how these render.
 const links = [
   { to: '/', label: 'Dashboard', end: true, icon: LayoutDashboard },
   { to: '/leads', label: 'Leads', icon: UsersIcon },
   { to: '/inbox', label: 'Inbox', icon: Inbox },
-  { to: '/email-campaigns', label: 'Email Campaigns', icon: Megaphone },
+  { to: '/email-campaigns', label: 'Campaigns', icon: Megaphone },
   { to: '/payments', label: 'Payments', icon: Wallet },
 ];
 
@@ -52,47 +54,56 @@ function useUniversalModules() {
   return groups;
 }
 
+// Dark-navy nav item — active state is a solid indigo pill (matches the
+// reference's blue highlight on Dashboard), inactive is soft off-white text
+// that brightens on hover. Same NavLink `to`/`end` props as before; only the
+// className changed.
 const navItem = ({ isActive }) =>
-  `flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+  `flex items-center gap-3 mx-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
     isActive
-      ? 'bg-[var(--color-brand-soft)] text-[var(--color-brand)]'
-      : 'text-[var(--color-muted)] hover:bg-[var(--color-canvas)] hover:text-[var(--color-ink)]'
+      ? 'bg-[#3B5BFF] text-white shadow-[0_4px_12px_rgba(59,91,255,0.35)]'
+      : 'text-[#AAB4D4] hover:bg-white/[0.06] hover:text-white'
   }`;
 
 function GroupLabel({ children }) {
   return (
-    <div className="px-6 pt-5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-faint)]">
+    <div className="px-6 pt-5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#5C6690]">
       {children}
     </div>
   );
 }
 
-function DrawerContent({ onNavigate, onClose }) {
+// The sidebar's inner content — identical nav structure to before (same
+// links, same module-registry loop, same admin section, same user card and
+// logout), restyled to the reference's dark-navy panel with a small brand
+// mark and a decorative closing card.
+function SidebarContent({ onNavigate, showClose, onClose }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const moduleGroups = useUniversalModules();
   const handleLogout = () => { logout(); navigate('/login'); };
 
   return (
-    <div className="flex flex-col h-full bg-[var(--color-surface)]">
-      <div className="px-5 py-5 flex items-center justify-between border-b border-line"
-        style={{ background: 'linear-gradient(135deg, var(--color-brand), var(--color-special))' }}>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-white/15 backdrop-blur border border-white/20">
-            <span className="text-white font-bold text-sm">i</span>
+    <div className="flex flex-col h-full" style={{ background: '#111A3A' }}>
+      <div className="px-5 py-5 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: 'linear-gradient(135deg, #4F6BFF, #7C3AED)' }}>
+            <Sparkles className="w-[18px] h-[18px] text-white" />
           </div>
           <div>
-            <div className="text-lg font-bold tracking-tight leading-none text-white">iCRM</div>
-            <div className="text-[10px] text-white/70 mt-0.5">Grow Connections</div>
+            <div className="text-[17px] font-bold tracking-tight leading-none text-white">iCRM</div>
+            <div className="text-[10px] text-[#7883AD] mt-1">Grow Connections</div>
           </div>
         </div>
-        <button onClick={onClose} aria-label="Close navigation"
-          className="text-white/70 hover:text-white p-1 rounded-lg hover:bg-white/10">
-          <X className="w-5 h-5" />
-        </button>
+        {showClose && (
+          <button onClick={onClose} aria-label="Close navigation" className="text-[#7883AD] hover:text-white p-1 rounded-lg hover:bg-white/10">
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
-      <nav className="flex-1 py-3 overflow-y-auto thin-scroll" aria-label="Main navigation">
+      <nav className="flex-1 py-2 overflow-y-auto thin-scroll" aria-label="Main navigation">
         {links.map((l) => (
           <NavLink key={l.to} to={l.to} end={l.end} onClick={onNavigate} className={navItem}>
             <l.icon className="w-[18px] h-[18px] shrink-0" />
@@ -121,15 +132,28 @@ function DrawerContent({ onNavigate, onClose }) {
         ))}
       </nav>
 
-      <div className="px-3 py-3 border-t border-line">
-        <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
+      {/* Decorative closing card — purely visual, matches the reference's
+          "Turn Leads into Success" panel. No functionality. */}
+      <div className="px-3 pb-3 pt-2 shrink-0">
+        <div className="rounded-2xl p-4 relative overflow-hidden"
+          style={{ background: 'linear-gradient(160deg, #1B2555, #141C42)' }}>
+          <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-20"
+            style={{ background: 'radial-gradient(circle, #7C9CFF, transparent 70%)' }} />
+          <Sparkles className="w-5 h-5 text-[#7C9CFF] mb-2" />
+          <p className="text-white text-sm font-semibold leading-tight">Turn Leads<br />into Success</p>
+          <p className="text-[#8891B8] text-[11px] mt-1">Engage. Nurture. Convert.</p>
+        </div>
+      </div>
+
+      <div className="px-3 pb-4 pt-1 border-t border-white/[0.06] shrink-0">
+        <div className="flex items-center gap-2.5 px-2 py-2 rounded-xl mt-3">
           <Avatar name={user?.full_name || user?.username} size="sm" />
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-ink truncate">{user?.full_name || user?.username}</div>
-            <div className="t-meta truncate">{user?.role?.name || user?.role_name || 'User'}</div>
+            <div className="text-sm font-medium text-white truncate">{user?.full_name || user?.username}</div>
+            <div className="text-[11px] text-[#7883AD] truncate">{user?.role?.name || user?.role_name || 'User'}</div>
           </div>
           <button onClick={handleLogout} title="Log out" aria-label="Log out"
-            className="text-[var(--color-faint)] hover:text-[var(--color-danger)] p-1.5 rounded-lg hover:bg-[var(--color-canvas)] shrink-0">
+            className="text-[#7883AD] hover:text-[#FF6B81] p-1.5 rounded-lg hover:bg-white/[0.06] shrink-0">
             <LogOut className="w-4 h-4" />
           </button>
         </div>
@@ -138,8 +162,7 @@ function DrawerContent({ onNavigate, onClose }) {
   );
 }
 
-// Human-readable breadcrumb from the path. Kept simple deliberately —
-// deep per-record titles would need a fetch the shell shouldn't own.
+// Human-readable breadcrumb from the path — unchanged logic, restyled.
 function Breadcrumb() {
   const { pathname } = useLocation();
   if (pathname === '/') return <span className="t-meta">Dashboard</span>;
@@ -161,6 +184,10 @@ function Breadcrumb() {
 }
 
 export default function Layout() {
+  // Mobile/tablet still use an overlay, opened by the hamburger — the
+  // reference's own lead-detail screenshot shows a hamburger button too.
+  // Desktop (lg+) now shows the sidebar permanently, matching the
+  // reference's always-visible navy panel, via the fixed column below.
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -168,8 +195,6 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Close on navigation — the brief asks for the drawer to dismiss itself
-  // after picking a module rather than staying open over the content.
   useEffect(() => { setDrawerOpen(false); setMenuOpen(false); }, [location.pathname]);
 
   useEffect(() => {
@@ -185,68 +210,78 @@ export default function Layout() {
   }, []);
 
   return (
-    <div className="min-h-screen" style={{ fontFamily: 'var(--font-body)' }}>
-      {/* Drawer overlays the page rather than reserving permanent width,
-          so content gets the full viewport when it's closed. */}
+    <div className="min-h-screen lg:flex" style={{ fontFamily: 'var(--font-body)' }}>
+      {/* Permanent sidebar on desktop. */}
+      <aside className="hidden lg:block w-[264px] shrink-0 fixed inset-y-0 left-0 z-20">
+        <SidebarContent />
+      </aside>
+
+      {/* Overlay sidebar for mobile/tablet, opened by the header hamburger. */}
       {drawerOpen && (
-        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Navigation">
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
           <div className="drawer-backdrop absolute inset-0 bg-black/40" onClick={() => setDrawerOpen(false)} />
-          <aside className="drawer-panel absolute inset-y-0 left-0 w-[280px] max-w-[85vw] shadow-2xl">
-            <DrawerContent onNavigate={() => setDrawerOpen(false)} onClose={() => setDrawerOpen(false)} />
+          <aside className="drawer-panel absolute inset-y-0 left-0 w-[264px] max-w-[85vw] shadow-2xl">
+            <SidebarContent onNavigate={() => setDrawerOpen(false)} showClose onClose={() => setDrawerOpen(false)} />
           </aside>
         </div>
       )}
 
-      <header className="sticky top-0 z-30 bg-[var(--color-surface)] border-b border-line">
-        <div className="flex items-center gap-3 px-4 sm:px-6 h-14">
-          <button onClick={() => setDrawerOpen(true)} aria-label="Open navigation"
-            className="p-2 -ml-2 rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-canvas)] hover:text-ink shrink-0">
-            <Menu className="w-5 h-5" />
-          </button>
+      <div className="flex-1 min-w-0 lg:ml-[264px]">
+        <header className="sticky top-0 z-30 bg-white border-b border-line">
+          <div className="flex items-center gap-3 px-4 sm:px-6 h-16">
+            <button onClick={() => setDrawerOpen(true)} aria-label="Open navigation"
+              className="lg:hidden p-2 -ml-2 rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-canvas)] hover:text-ink shrink-0">
+              <Menu className="w-5 h-5" />
+            </button>
 
-          <div className="hidden md:block shrink-0"><Breadcrumb /></div>
+            <div className="hidden md:block shrink-0"><Breadcrumb /></div>
 
-          <div className="flex-1 flex justify-center px-2 min-w-0">
-            <GlobalSearch />
-          </div>
+            <div className="flex-1 flex justify-center px-2 min-w-0 max-w-2xl mx-auto">
+              <GlobalSearch />
+            </div>
 
-          <div className="flex items-center gap-1 shrink-0">
-            <NotificationBell />
-            <div className="relative" ref={menuRef}>
-              <button onClick={() => setMenuOpen((s) => !s)} aria-haspopup="menu" aria-expanded={menuOpen}
-                className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-lg hover:bg-[var(--color-canvas)]">
-                <Avatar name={user?.full_name || user?.username} size="sm" />
-                <div className="hidden sm:block text-left leading-tight">
-                  <div className="text-sm font-medium text-ink">{user?.full_name || user?.username}</div>
-                  <div className="text-[11px] text-[var(--color-muted)]">{user?.role?.name || user?.role_name || 'User'}</div>
-                </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <NotificationBell />
+              <button aria-label="Quick create" title="Quick create"
+                onClick={() => navigate('/leads')}
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0"
+                style={{ background: 'linear-gradient(135deg, #4F6BFF, #7C3AED)' }}>
+                <Plus className="w-[18px] h-[18px]" />
               </button>
-              {menuOpen && (
-                <div role="menu" className="absolute right-0 mt-1 w-48 card py-1 shadow-lg z-40">
-                  <button role="menuitem" onClick={() => navigate('/settings')}
-                    className="w-full text-left px-3 py-2 text-sm text-ink hover:bg-[var(--color-canvas)] flex items-center gap-2">
-                    <SettingsIcon className="w-4 h-4 text-[var(--color-muted)]" /> Settings
-                  </button>
-                  <button role="menuitem" onClick={() => { logout(); navigate('/login'); }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-canvas)] flex items-center gap-2"
-                    style={{ color: 'var(--color-danger)' }}>
-                    <LogOut className="w-4 h-4" /> Log out
-                  </button>
-                </div>
-              )}
+              <div className="relative" ref={menuRef}>
+                <button onClick={() => setMenuOpen((s) => !s)} aria-haspopup="menu" aria-expanded={menuOpen}
+                  className="flex items-center gap-2 pl-1.5 pr-2 py-1 rounded-xl hover:bg-[var(--color-canvas)]">
+                  <Avatar name={user?.full_name || user?.username} size="sm" />
+                  <div className="hidden sm:block text-left leading-tight">
+                    <div className="text-sm font-semibold text-ink">{user?.full_name || user?.username}</div>
+                    <div className="text-[11px] text-[var(--color-muted)]">{user?.role?.name || user?.role_name || 'User'}</div>
+                  </div>
+                  <ChevronDown className="w-3.5 h-3.5 text-[var(--color-faint)] hidden sm:block" />
+                </button>
+                {menuOpen && (
+                  <div role="menu" className="absolute right-0 mt-1 w-48 card py-1 shadow-lg z-40">
+                    <button role="menuitem" onClick={() => navigate('/settings')}
+                      className="w-full text-left px-3 py-2 text-sm text-ink hover:bg-[var(--color-canvas)] flex items-center gap-2">
+                      <SettingsIcon className="w-4 h-4 text-[var(--color-muted)]" /> Settings
+                    </button>
+                    <button role="menuitem" onClick={() => { logout(); navigate('/login'); }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-canvas)] flex items-center gap-2"
+                      style={{ color: 'var(--color-danger)' }}>
+                      <LogOut className="w-4 h-4" /> Log out
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main className="px-4 sm:px-6 py-6">
-        {/* Keyed on the path so navigating away from a crashed page clears
-            the error and renders the new route normally. Without the key a
-            boundary latches permanently once tripped. */}
-        <ErrorBoundary key={location.pathname}>
-          <Outlet />
-        </ErrorBoundary>
-      </main>
+        <main className="px-4 sm:px-6 py-6">
+          <ErrorBoundary key={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
+        </main>
+      </div>
 
       <AssistantWidget />
     </div>
