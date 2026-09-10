@@ -75,19 +75,19 @@ function DrawerContent({ onNavigate, onClose }) {
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-surface)]">
-      <div className="px-5 py-5 flex items-center justify-between border-b border-line">
+      <div className="px-5 py-5 flex items-center justify-between border-b border-line"
+        style={{ background: 'linear-gradient(135deg, var(--color-brand), var(--color-special))' }}>
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: 'var(--color-brand)' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-white/15 backdrop-blur border border-white/20">
             <span className="text-white font-bold text-sm">i</span>
           </div>
           <div>
-            <div className="text-lg font-bold tracking-tight leading-none text-ink">iCRM</div>
-            <div className="text-[10px] text-[var(--color-faint)] mt-0.5">Connect · Convert · Grow</div>
+            <div className="text-lg font-bold tracking-tight leading-none text-white">iCRM</div>
+            <div className="text-[10px] text-white/70 mt-0.5">Grow Connections</div>
           </div>
         </div>
         <button onClick={onClose} aria-label="Close navigation"
-          className="text-[var(--color-faint)] hover:text-ink p-1 rounded-lg hover:bg-[var(--color-canvas)]">
+          className="text-white/70 hover:text-white p-1 rounded-lg hover:bg-white/10">
           <X className="w-5 h-5" />
         </button>
       </div>
