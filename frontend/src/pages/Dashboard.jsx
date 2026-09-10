@@ -238,8 +238,8 @@ function CrmDashboardSection({ data }) {
   return (
     <>
       {data.attention?.length > 0 && (
-        <div className="rounded-2xl p-4 mt-5 flex items-center gap-3 flex-wrap" style={{ background: '#FFF8EC' }}>
-          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: '#FDECC8' }}>
+        <div className="rounded-2xl p-4 mt-5 flex items-center gap-3 flex-wrap" style={{ background: 'var(--color-warning-soft)' }}>
+          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: 'var(--color-warning-soft)', filter: 'brightness(0.96)' }}>
             <AlertTriangle className="w-4 h-4" style={{ color: '#B45309' }} />
           </div>
           <span className="text-sm font-bold text-ink shrink-0">Needs attention</span>

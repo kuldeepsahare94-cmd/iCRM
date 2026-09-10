@@ -274,7 +274,7 @@ export default function LeadDetail() {
 
             {can('leads', 'edit') && !lead.converted_contact_id && (
               <button onClick={convert} className="flex items-center gap-1.5 text-white text-sm font-semibold px-4 py-2.5 rounded-xl h-fit"
-                style={{ background: 'linear-gradient(135deg, #4F6BFF, #7C3AED)' }}>
+                style={{ background: 'linear-gradient(135deg, var(--color-brand), var(--color-special))' }}>
                 <UserCheck className="w-4 h-4" /> Convert Lead
               </button>
             )}

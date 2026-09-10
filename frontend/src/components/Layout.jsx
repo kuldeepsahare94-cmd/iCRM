@@ -88,7 +88,7 @@ function SidebarContent({ onNavigate, showClose, onClose }) {
       <div className="px-5 py-5 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: 'linear-gradient(135deg, #4F6BFF, #7C3AED)' }}>
+            style={{ background: 'linear-gradient(135deg, var(--color-brand), var(--color-special))' }}>
             <Sparkles className="w-[18px] h-[18px] text-white" />
           </div>
           <div>
@@ -184,10 +184,11 @@ function Breadcrumb() {
 }
 
 export default function Layout() {
-  // Mobile/tablet still use an overlay, opened by the hamburger — the
-  // reference's own lead-detail screenshot shows a hamburger button too.
-  // Desktop (lg+) now shows the sidebar permanently, matching the
-  // reference's always-visible navy panel, via the fixed column below.
+  // Collapsible overlay drawer on EVERY screen size — explicitly requested:
+  // closed by default, opened by the hamburger, backdrop + Escape + navigate
+  // all close it. A previous pass split this into "overlay on mobile,
+  // permanent panel on desktop" to chase the reference image's always-visible
+  // sidebar; that was wrong and has been reverted.
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -210,15 +211,10 @@ export default function Layout() {
   }, []);
 
   return (
-    <div className="min-h-screen lg:flex" style={{ fontFamily: 'var(--font-body)' }}>
-      {/* Permanent sidebar on desktop. */}
-      <aside className="hidden lg:block w-[264px] shrink-0 fixed inset-y-0 left-0 z-20">
-        <SidebarContent />
-      </aside>
-
-      {/* Overlay sidebar for mobile/tablet, opened by the header hamburger. */}
+    <div className="min-h-screen" style={{ fontFamily: 'var(--font-body)' }}>
+      {/* Overlay drawer — every breakpoint, same behaviour. */}
       {drawerOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
+        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Navigation">
           <div className="drawer-backdrop absolute inset-0 bg-black/40" onClick={() => setDrawerOpen(false)} />
           <aside className="drawer-panel absolute inset-y-0 left-0 w-[264px] max-w-[85vw] shadow-2xl">
             <SidebarContent onNavigate={() => setDrawerOpen(false)} showClose onClose={() => setDrawerOpen(false)} />
@@ -226,11 +222,11 @@ export default function Layout() {
         </div>
       )}
 
-      <div className="flex-1 min-w-0 lg:ml-[264px]">
+      <div className="flex-1 min-w-0">
         <header className="sticky top-0 z-30 bg-white border-b border-line">
           <div className="flex items-center gap-3 px-4 sm:px-6 h-16">
             <button onClick={() => setDrawerOpen(true)} aria-label="Open navigation"
-              className="lg:hidden p-2 -ml-2 rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-canvas)] hover:text-ink shrink-0">
+              className="p-2 -ml-2 rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-canvas)] hover:text-ink shrink-0">
               <Menu className="w-5 h-5" />
             </button>
 
@@ -245,7 +241,7 @@ export default function Layout() {
               <button aria-label="Quick create" title="Quick create"
                 onClick={() => navigate('/leads')}
                 className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0"
-                style={{ background: 'linear-gradient(135deg, #4F6BFF, #7C3AED)' }}>
+                style={{ background: 'linear-gradient(135deg, var(--color-brand), var(--color-special))' }}>
                 <Plus className="w-[18px] h-[18px]" />
               </button>
               <div className="relative" ref={menuRef}>
