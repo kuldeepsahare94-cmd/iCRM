@@ -44,6 +44,9 @@ function getTransporter() {
     port: Number(process.env.SMTP_PORT || 587),
     secure: Number(process.env.SMTP_PORT) === 465, // true for port 465, false for 587/others (STARTTLS)
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    // See resolveAccount's transporter below — forces IPv4 so hosts without
+    // outbound IPv6 don't fail with ENETUNREACH resolving smtp.gmail.com.
+    family: 4,
   });
 }
 
@@ -72,6 +75,10 @@ async function sendEmail({ to, subject, text, html, attachments, userId }) {
     port: Number(acct.smtp_port || 587),
     secure: Number(acct.smtp_port) === 465,
     auth: { user: acct.smtp_user, pass: decrypt(acct.smtp_pass_encrypted) },
+    // Many hosts have no outbound IPv6 route, so an IPv6 DNS answer for
+    // smtp.gmail.com fails immediately with ENETUNREACH. Forcing IPv4
+    // sidesteps that — see buildTransport in routes/emailSettings.js.
+    family: 4,
   });
   const from = acct.from_name ? `"${acct.from_name}" <${acct.from_email}>` : acct.from_email;
   const info = await transporter.sendMail({ from, to, subject, text, html, attachments });
