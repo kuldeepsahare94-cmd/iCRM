@@ -366,6 +366,9 @@ export const api = {
   saveMyEmail: (body) => req('PUT', '/email-settings/me', body),
   testEmail: (scope) => req('POST', '/email-settings/test', { scope }),
 
+  listWaQuickTemplates: () => req('GET', '/wa-quick-templates'),
+  createWaQuickTemplate: (body) => req('POST', '/wa-quick-templates', body),
+
   addNote: (relatedModule, relatedRecordId, body) =>
     req('POST', '/notes', { body, related_module: relatedModule, related_record_id: relatedRecordId }),
   aiCustomerSummary: (accountId, question) => req('POST', `/c360/accounts/${accountId}/ai-summary`, { question }),

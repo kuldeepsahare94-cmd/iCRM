@@ -9,6 +9,7 @@ import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 import StatusBadge from '../components/StatusBadge';
 import DisposeLeadModal from '../components/DisposeLeadModal';
+import WhatsAppTemplateModal from '../components/WhatsAppTemplateModal';
 import { accentFor, accentGradient } from '../theme/moduleAccents';
 import { CallsTab, MeetingsTab, TasksTab, DocumentsTab, DealsTab, NotesTab } from '../components/LeadRelatedTabs';
 
@@ -105,21 +106,53 @@ function ScoreInsightsCard({ scoring }) {
 
 // Built entirely from the same response's real `negatives` — no invented
 // copy. A lead with nothing negative shows no card at all.
-function SuggestedNextSteps({ scoring }) {
+// Maps a suggestion to the action that actually resolves it, so the list
+// is a set of buttons rather than a read-only checklist. Matching on the
+// verb the scoring engine now uses — the suggestions were rewritten from
+// status reports ("No connected calls yet") into instructions ("Call this
+// lead and log a connected call"), which is what makes this possible.
+function suggestionAction(text) {
+  if (/^Add /i.test(text)) return { label: 'Edit lead', key: 'edit' };
+  if (/^Call this lead|connected call/i.test(text)) return { label: 'Log call', key: 'call' };
+  if (/Log a note|record of contact/i.test(text)) return { label: 'Add note', key: 'note' };
+  if (/Schedule a follow-up/i.test(text)) return { label: 'Schedule', key: 'schedule' };
+  if (/Follow up|Reach out|Re-engage/i.test(text)) return { label: 'WhatsApp', key: 'whatsapp' };
+  if (/Re-qualify/i.test(text)) return { label: 'Edit lead', key: 'edit' };
+  return null;
+}
+
+function SuggestedNextSteps({ scoring, onAction }) {
   const items = (scoring?.components || []).flatMap((c) => c.negatives || []).slice(0, 5);
   if (items.length === 0) return null;
   return (
     <div className="card p-4">
-      <h3 className="text-xs font-semibold text-slate-500 uppercase mb-3 flex items-center gap-1.5">
-        <Lightbulb className="w-3.5 h-3.5 text-amber" /> Suggested Next Steps
-      </h3>
+      <div className="flex items-center gap-2 mb-3 pb-2.5 border-b border-line">
+        <span className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: '#D9770622', color: '#D97706' }}>
+          <Lightbulb className="w-3.5 h-3.5" />
+        </span>
+        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Suggested Next Steps</h3>
+      </div>
       <div className="space-y-2">
-        {items.map((text, i) => (
-          <div key={i} className="flex items-start gap-2 text-sm">
-            <span className="w-4 h-4 rounded-full border-2 border-line shrink-0 mt-0.5" />
-            <span className="text-ink">{text}</span>
-          </div>
-        ))}
+        {items.map((text, i) => {
+          const action = suggestionAction(text);
+          return (
+            <div key={i} className="flex items-start justify-between gap-2 text-sm group">
+              <div className="flex items-start gap-2 min-w-0">
+                <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5"
+                  style={{ background: '#D9770618', color: '#D97706' }}>{i + 1}</span>
+                <span className="text-ink">{text}</span>
+              </div>
+              {action && onAction && (
+                <button onClick={() => onAction(action.key)}
+                  className="text-xs font-semibold shrink-0 whitespace-nowrap px-2 py-1 rounded-lg transition-colors"
+                  style={{ background: `${ACCENT.solid}12`, color: ACCENT.solid }}>
+                  {action.label}
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -127,6 +160,7 @@ function SuggestedNextSteps({ scoring }) {
 
 const QUICK_ACTIONS = [
   { key: 'call', label: 'Log Call', icon: Phone, from: '#818CF8', to: '#4338CA' },
+  { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, from: '#4ADE80', to: '#15803D' },
   { key: 'email', label: 'Send Email', icon: Mail, from: '#93C5FD', to: '#1D4ED8' },
   { key: 'meeting', label: 'Schedule Meeting', icon: Calendar, from: '#6EE7B7', to: '#047857' },
   { key: 'task', label: 'Create Task', icon: CheckSquare, from: '#FCD34D', to: '#B45309' },
@@ -137,6 +171,26 @@ const QUICK_ACTIONS = [
 // This module's identity colour, from the shared accent system — the same
 // fuchsia the sidebar and Leads list already use.
 const ACCENT = accentFor('leads');
+
+
+// A section header with a coloured icon chip. The three info cards were
+// visually identical grey text blocks — same size, same weight, no anchor
+// for the eye. A small tinted icon gives each one an identity and makes
+// the card feel deliberate rather than like raw output.
+function CardHeader({ icon: Icon, title, tint, action }) {
+  return (
+    <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-line">
+      <div className="flex items-center gap-2">
+        <span className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: `${tint}1A`, color: tint }}>
+          <Icon className="w-3.5 h-3.5" />
+        </span>
+        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{title}</h3>
+      </div>
+      {action}
+    </div>
+  );
+}
 
 // One compact definition row. Every field rendered through this so label
 // and value alignment is identical everywhere, and an empty value always
@@ -169,6 +223,7 @@ export default function LeadDetail() {
   const can = usePermissions();
   const [lead, setLead] = useState(null);
   const [disposing, setDisposing] = useState(false);
+  const [waOpen, setWaOpen] = useState(false);
   const [pageTab, setPageTab] = useState('overview');
   const [tab, setTab] = useState('note');
   const [note, setNote] = useState('');
@@ -219,6 +274,7 @@ export default function LeadDetail() {
 
   const runQuickAction = (key) => {
     if (key === 'call') return setDisposing(true);
+    if (key === 'whatsapp') return setWaOpen(true);
     if (key === 'email') return lead.email && window.open(`mailto:${lead.email}`, '_self');
     if (key === 'meeting') return setPageTab('meetings');
     if (key === 'task') return setPageTab('tasks');
@@ -288,7 +344,8 @@ export default function LeadDetail() {
                   <span className="flex items-center gap-1.5">
                     <Phone className="w-3.5 h-3.5" /> {lead.mobile}
                     <a href={`tel:${lead.mobile}`} aria-label="Call" className="text-[var(--color-brand)] hover:opacity-70"><Phone className="w-3.5 h-3.5" /></a>
-                    <a href={`https://wa.me/${lead.mobile.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" aria-label="WhatsApp" className="text-[var(--color-success)] hover:opacity-70"><MessageCircle className="w-3.5 h-3.5" /></a>
+                    <button onClick={(e) => { e.preventDefault(); setWaOpen(true); }} aria-label="Send WhatsApp"
+              className="text-[var(--color-success)] hover:opacity-70"><MessageCircle className="w-3.5 h-3.5" /></button>
                   </span>
                 )}
                 {lead.email && (
@@ -475,14 +532,12 @@ export default function LeadDetail() {
           <div className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="card p-4">
-                <div className="flex items-center justify-between mb-2.5">
-                  <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Basic Information</h3>
-                  {can('leads', 'edit') && (
+                <CardHeader icon={Info} title="Basic Information" tint={ACCENT.solid}
+                  action={can('leads', 'edit') && (
                     <button onClick={() => setEditing(true)} className="text-xs font-medium flex items-center gap-1" style={{ color: 'var(--color-brand)' }}>
                       <Pencil className="w-3 h-3" /> Edit
                     </button>
-                  )}
-                </div>
+                  )} />
                 <dl className="text-sm space-y-1.5">
                   <Row label="Full Name" value={lead.student_name} strong />
                   <Row label="Mobile" value={lead.mobile} />
@@ -500,7 +555,7 @@ export default function LeadDetail() {
 
               <div className="space-y-4">
                 <div className="card p-4">
-                  <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2.5">Additional Details</h3>
+                  <CardHeader icon={TrendingUp} title="Additional Details" tint="#D97706" />
                   <dl className="text-sm space-y-1.5">
                     <Row label="Product Interest" value={lead.product_interest} />
                     <Row label="Service Interest" value={lead.service_interest} />
@@ -510,7 +565,7 @@ export default function LeadDetail() {
                 </div>
 
                 <div className="card p-4">
-                  <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2.5">Personal Information</h3>
+                  <CardHeader icon={UserCheck} title="Personal Information" tint="#0D9488" />
                   <dl className="text-sm space-y-1.5">
                     <Row label="Gender" value={lead.gender} />
                     <Row label="Date of Birth" value={lead.date_of_birth} />
@@ -521,7 +576,7 @@ export default function LeadDetail() {
 
             {can('leads', 'edit') && !lead.converted_contact_id && (
               <div className="card p-4">
-                <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2.5">Change Status</h3>
+                <CardHeader icon={CheckSquare} title="Change Status" tint="#0284C7" />
                 <div className="flex flex-wrap gap-1.5">
                   {ALL_STATUSES.map((st) => (
                     <button key={st} onClick={() => changeStatus(st)}
@@ -578,7 +633,11 @@ export default function LeadDetail() {
           <div className="space-y-4">
             <ScoreInsightsCard scoring={scoring} />
 
-            <SuggestedNextSteps scoring={scoring} />
+            <SuggestedNextSteps scoring={scoring} onAction={(key) => {
+              if (key === 'edit') return setEditing(true);
+              if (key === 'schedule') return setScheduling(true);
+              return runQuickAction(key);
+            }} />
 
             <div className="card p-4">
               <div className="flex items-center justify-between mb-2">
@@ -641,6 +700,11 @@ export default function LeadDetail() {
       {disposing && (
         <DisposeLeadModal lead={lead} onClose={() => setDisposing(false)}
           onDisposed={() => { setDisposing(false); load(); }} />
+      )}
+
+      {waOpen && (
+        <WhatsAppTemplateModal lead={lead} senderName={lead.assigned_counselor}
+          onClose={() => setWaOpen(false)} />
       )}
     </div>
   );
