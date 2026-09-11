@@ -100,21 +100,34 @@ function AgendaRow({ item, render }) {
     : <div className="p-1.5 -mx-1.5">{body}</div>;
 }
 
-function AgendaCard({ title, icon: Icon, items, render, empty, action }) {
+function AgendaCard({ title, icon: Icon, iconTone, items, render, empty, action, cta }) {
   const list = items || [];
+  const tone = iconTone || 'var(--color-brand)';
   return (
-    <div className="card p-4">
+    <div className="card p-4 flex flex-col">
       <div className="flex items-center justify-between mb-3">
         <h3 className="t-section flex items-center gap-2">
-          {Icon && <Icon className="w-4 h-4 text-[var(--color-brand)]" />}
+          {Icon && (
+            <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+              style={{ background: `${tone}1A`, color: tone }}>
+              <Icon className="w-4 h-4" />
+            </span>
+          )}
           {title}
           {list.length > 0 && <span className="t-meta">({list.length})</span>}
         </h3>
         {action}
       </div>
       {list.length === 0 ? (
-        <div className="py-4 text-center">
+        <div className="flex-1 flex flex-col items-center justify-center text-center py-6 gap-3">
           <p className="t-meta">{empty}</p>
+          {cta && (
+            <Link to={cta.to}
+              className="text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+              style={{ background: `${tone}14`, color: tone }}>
+              {cta.label}
+            </Link>
+          )}
         </div>
       ) : (
         <div className="space-y-1">{list.map((item, i) => <AgendaRow key={i} item={item} render={render} />)}</div>
@@ -271,17 +284,20 @@ function CrmDashboardSection({ data }) {
       </div>
 
       <div className="grid md:grid-cols-3 gap-4 mt-8">
-        <AgendaCard title="Follow-ups due today" icon={CalendarClock} items={data.agenda?.follow_ups}
+        <AgendaCard title="Follow-ups due today" icon={CalendarClock} iconTone="#C026D3" items={data.agenda?.follow_ups}
           render={(f) => ({ title: f.title, phone: f.mobile, meta: f.mobile || f.status, to: `/leads/${f.id}` })}
           empty="No follow-ups scheduled for today."
+          cta={{ to: '/leads', label: 'View all leads' }}
           action={data.agenda?.follow_ups?.length > 0 && <Link to="/leads" className="text-xs font-medium" style={{ color: 'var(--color-brand)' }}>View all →</Link>} />
-        <AgendaCard title="Meetings today" icon={Users}
+        <AgendaCard title="Meetings today" icon={Users} iconTone="#0284C7"
           items={data.agenda?.meetings}
           render={(m) => ({ title: m.title, meta: m.start_datetime ? String(m.start_datetime).slice(11, 16) : '', to: m.related_module ? `/records/${m.related_module}/${m.related_record_id}` : null })}
-          empty="Nothing in the diary today." />
-        <AgendaCard title="Tasks due" icon={CheckSquare} items={data.agenda?.tasks_due}
+          empty="Nothing in the diary today."
+          cta={{ to: '/records/meetings', label: 'Schedule a meeting' }} />
+        <AgendaCard title="Tasks due" icon={CheckSquare} iconTone="#4F46E5" items={data.agenda?.tasks_due}
           render={(t) => ({ title: t.title, meta: t.priority, to: null })}
-          empty="No tasks due." />
+          empty="No tasks due."
+          cta={{ to: '/records/tasks', label: 'Create a task' }} />
       </div>
 
       {data.performance && (
@@ -386,36 +402,44 @@ export default function Dashboard() {
   return (
     <div className="max-w-[1600px] mx-auto rounded-3xl -m-4 sm:-m-6 p-4 sm:p-6"
       style={{ background: 'radial-gradient(ellipse 1400px 500px at top, var(--color-brand-soft), transparent 60%)' }}>
-      <div className="rounded-2xl p-6 mb-2 relative overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, var(--color-brand-soft), #FFFFFF)' }}>
-        {/* Small decorative "goal" illustration — mirrors the reference's
-            mountain-and-flag motif. Purely visual, no data. */}
-        <svg aria-hidden="true" viewBox="0 0 160 90" className="hidden md:block absolute top-2 right-[220px] w-40 h-24 opacity-90">
-          <path d="M0 90 L45 25 L65 50 L95 10 L160 90 Z" fill="var(--color-brand-soft)" />
-          <path d="M55 90 L95 10 L135 90 Z" fill="#C7D2FE" />
-          <path d="M85 22 L95 10 L105 22 Z" fill="#818CF8" />
-          <rect x="94" y="4" width="1.6" height="20" fill="#4338CA" />
-          <path d="M95.6 4 L110 9 L95.6 14 Z" fill="#4F46E5" />
-        </svg>
+      <div className="rounded-2xl px-6 py-7 mb-2 relative overflow-hidden"
+        style={{ background: 'linear-gradient(120deg, #EEF2FF 0%, #F5F3FF 45%, #FFFFFF 100%)' }}>
+        {/* Soft depth wash behind the content — a flat pastel panel is what
+            made this strip read as empty. Sits behind everything and is
+            pointer-events-none so it can never interfere. */}
+        <div aria-hidden="true" className="absolute inset-0 pointer-events-none"
+          style={{ background: 'radial-gradient(circle 420px at 78% 20%, rgba(129,140,248,0.16), transparent 70%)' }} />
 
-        <div className="relative flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="font-display text-2xl font-bold text-ink" style={{ fontFamily: 'var(--font-display)' }}>
+        <div className="relative flex items-center justify-between flex-wrap gap-6">
+          <div className="min-w-0">
+            <h1 className="font-display text-[26px] font-bold text-ink leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
               {greeting}, {user?.full_name?.split(' ')[0] || user?.username || 'there'}
             </h1>
-            <p className="text-[var(--color-muted)] text-sm mt-1">Here's what's happening with your CRM today.</p>
+            <p className="text-[var(--color-muted)] text-sm mt-1.5">Here's what's happening with your CRM today.</p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="hidden lg:block text-right max-w-[220px]">
-              <p className="text-xs text-[var(--color-muted)] italic leading-snug">
-                "Small steps today, big results tomorrow."
-              </p>
-            </div>
-            <div className="flex items-center gap-2 bg-white border border-line rounded-xl px-3 py-2 shrink-0">
-              <CalendarClock className="w-4 h-4 text-[var(--color-brand)]" />
-              <span className="text-sm text-ink font-medium">{today}</span>
-            </div>
+          {/* Illustration and quote now sit side by side in their own flex
+              zone rather than one being absolutely positioned over the
+              other. */}
+          <div className="hidden md:flex items-center gap-3 shrink-0 ml-auto">
+            <svg aria-hidden="true" viewBox="0 0 170 96" className="w-[150px] h-[84px] shrink-0">
+              <ellipse cx="85" cy="88" rx="72" ry="7" fill="#C7D2FE" opacity="0.35" />
+              <path d="M0 88 L42 34 L64 58 L96 16 L170 88 Z" fill="#DDE3FF" />
+              <path d="M52 88 L96 16 L140 88 Z" fill="#C7D2FE" />
+              <path d="M83 31 L96 16 L109 31 L101 27 L96 32 L91 27 Z" fill="#FFFFFF" />
+              <rect x="95" y="6" width="1.8" height="22" rx="0.9" fill="#4338CA" />
+              <path d="M96.8 6 L114 11.5 L96.8 17 Z" fill="#4F46E5" />
+              <circle cx="34" cy="26" r="3" fill="#A5B4FC" opacity="0.8" />
+              <circle cx="146" cy="34" r="2.2" fill="#A5B4FC" opacity="0.7" />
+            </svg>
+            <p className="text-xs text-[var(--color-muted)] italic leading-snug max-w-[150px]">
+              "Small steps today, big results tomorrow."
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 bg-white border border-line rounded-xl px-3.5 py-2.5 shrink-0 shadow-sm">
+            <CalendarClock className="w-4 h-4 text-[var(--color-brand)]" />
+            <span className="text-sm text-ink font-semibold">{today}</span>
           </div>
         </div>
       </div>
