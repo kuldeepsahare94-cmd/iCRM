@@ -20,24 +20,53 @@ function resolveMobile(accountId, contactId) {
 }
 
 function recalcTotals(quotationId) {
+  const quotation = db.prepare('SELECT * FROM quotations WHERE id=?').get(quotationId);
   const items = db.prepare('SELECT * FROM quotation_items WHERE quotation_id=?').all(quotationId);
-  let subtotal = 0, totalDiscount = 0, taxTotal = 0;
   const updateItem = db.prepare('UPDATE quotation_items SET line_total=? WHERE id=?');
-  for (const item of items) {
-    const gross = item.quantity * item.unit_price;
-    const discountAmt = gross * ((item.discount_percent || 0) / 100);
-    const taxable = gross - discountAmt;
-    const taxAmt = taxable * ((item.tax_percent || 0) / 100);
-    const lineTotal = taxable + taxAmt;
-    updateItem.run(lineTotal, item.id);
+
+  // Pass 1 — line level: gross, then the line's own discount.
+  let subtotal = 0, lineDiscountTotal = 0;
+  const rows = items.map((item) => {
+    const gross = (item.quantity || 0) * (item.unit_price || 0);
+    const lineDiscount = gross * ((item.discount_percent || 0) / 100);
+    const net = gross - lineDiscount;
     subtotal += gross;
-    totalDiscount += discountAmt;
+    lineDiscountTotal += lineDiscount;
+    return { item, gross, net };
+  });
+  const netAfterLineDiscounts = rows.reduce((sum, r) => sum + r.net, 0);
+
+  // Pass 2 — the overall (whole-quotation) discount.
+  const type = quotation?.overall_discount_type || 'percent';
+  const value = Number(quotation?.overall_discount_value) || 0;
+  let overallDiscount = type === 'amount' ? value : netAfterLineDiscounts * (value / 100);
+  // Never discount below zero, however the value was entered.
+  overallDiscount = Math.max(0, Math.min(overallDiscount, netAfterLineDiscounts));
+
+  // Pass 3 — tax. The overall discount is spread across lines in proportion
+  // to each line's value, so every line is taxed at ITS OWN rate on ITS
+  // post-discount value. Applying tax before the overall discount, or at a
+  // single blended rate, would both produce a wrong GST figure whenever a
+  // quotation mixes rates (say 18% software alongside 5% hardware) — and
+  // GST is legally charged on the discounted taxable value, not the gross.
+  let taxTotal = 0;
+  for (const r of rows) {
+    const share = netAfterLineDiscounts > 0 ? r.net / netAfterLineDiscounts : 0;
+    const taxable = r.net - (overallDiscount * share);
+    const taxAmt = taxable * ((r.item.tax_percent || 0) / 100);
     taxTotal += taxAmt;
+    // line_total stays the line's own figure BEFORE the overall discount,
+    // so the printed line items still add up to the shown subtotal and the
+    // overall discount reads as its own visible deduction.
+    updateItem.run(r.net + (r.net * ((r.item.tax_percent || 0) / 100)), r.item.id);
   }
+
+  const totalDiscount = lineDiscountTotal + overallDiscount;
   const grandTotal = subtotal - totalDiscount + taxTotal;
-  db.prepare(`UPDATE quotations SET subtotal=?, total_discount=?, tax_total=?, grand_total=?, updated_at=datetime('now') WHERE id=?`)
-    .run(subtotal, totalDiscount, taxTotal, grandTotal, quotationId);
-  return { subtotal, totalDiscount, taxTotal, grandTotal };
+
+  db.prepare(`UPDATE quotations SET subtotal=?, total_discount=?, overall_discount_amount=?, tax_total=?, grand_total=?, updated_at=datetime('now') WHERE id=?`)
+    .run(subtotal, totalDiscount, overallDiscount, taxTotal, grandTotal, quotationId);
+  return { subtotal, totalDiscount, overallDiscount, taxTotal, grandTotal };
 }
 
 function nextQuoteNumber() {
@@ -79,14 +108,17 @@ router.post('/', requirePermission('quotations', 'create'), (req, res) => {
     const info = db.prepare(`
       INSERT INTO quotations (
         quote_number, quote_date, valid_until, account_id, contact_id, opportunity_id, billing_address,
-        shipping_address, currency, payment_terms, salesperson_id, notes, terms, status
+        shipping_address, currency, payment_terms, salesperson_id, notes, terms, status,
+        overall_discount_type, overall_discount_value
       ) VALUES (@quote_number, @quote_date, @valid_until, @account_id, @contact_id, @opportunity_id, @billing_address,
-        @shipping_address, @currency, @payment_terms, @salesperson_id, @notes, @terms, @status)
+        @shipping_address, @currency, @payment_terms, @salesperson_id, @notes, @terms, @status,
+        @overall_discount_type, @overall_discount_value)
     `).run({
       quote_number: b.quote_number || nextQuoteNumber(),
       quote_date: b.quote_date || new Date().toISOString(),
       valid_until: null, contact_id: null, opportunity_id: null, billing_address: null, shipping_address: null,
       currency: 'INR', payment_terms: null, salesperson_id: req.user.id, notes: null, terms: null, status: 'Draft',
+      overall_discount_type: 'percent', overall_discount_value: 0,
       ...b,
     });
     const quotationId = info.lastInsertRowid;
@@ -118,13 +150,16 @@ router.put('/:id', requirePermission('quotations', 'edit'), (req, res) => {
     db.prepare(`
       UPDATE quotations SET quote_date=?, valid_until=?, account_id=?, contact_id=?, opportunity_id=?, billing_address=?,
         shipping_address=?, currency=?, payment_terms=?, notes=?, terms=?, status=?,
+        overall_discount_type=?, overall_discount_value=?,
         sent_at=CASE WHEN ?='Sent' AND status!='Sent' THEN datetime('now') ELSE sent_at END,
         accepted_at=CASE WHEN ?='Accepted' AND status!='Accepted' THEN datetime('now') ELSE accepted_at END,
         rejected_at=CASE WHEN ?='Rejected' AND status!='Rejected' THEN datetime('now') ELSE rejected_at END,
         updated_at=datetime('now')
       WHERE id=?
     `).run(m.quote_date, m.valid_until, m.account_id, m.contact_id, m.opportunity_id, m.billing_address,
-      m.shipping_address, m.currency, m.payment_terms, m.notes, m.terms, m.status, m.status, m.status, m.status, req.params.id);
+      m.shipping_address, m.currency, m.payment_terms, m.notes, m.terms, m.status,
+      m.overall_discount_type || 'percent', Number(m.overall_discount_value) || 0,
+      m.status, m.status, m.status, req.params.id);
 
     if (Array.isArray(b.items)) {
       db.prepare('DELETE FROM quotation_items WHERE quotation_id=?').run(req.params.id);

@@ -20,6 +20,7 @@ require('./db-phase28-email-accounts');
 require('./db-phase29-inbound-email');
 require('./db-phase30-email-campaigns');
 require('./db-phase31-email-diagnostics');
+require('./db-phase32-quotation-discount');
 
 const app = express();
 
