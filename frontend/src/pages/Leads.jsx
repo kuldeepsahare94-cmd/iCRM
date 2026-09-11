@@ -59,7 +59,33 @@ const empty = {
   assigned_counselor: '', remarks: '', lead_rating: '', product_interest: '',
 };
 
-function LeadCard({ lead, onMoved, canEdit }) {
+
+// Leads KPI tile. Clickable: each one filters the list to that status, so
+// the numbers are a control rather than just a readout. Uses the same
+// gradient-chip + accent-bar treatment as the dashboard so the two pages
+// read as one product.
+function LeadKpi({ label, value, icon: Icon, from, to, active, onClick }) {
+  return (
+    <button onClick={onClick}
+      className={`relative bg-white border rounded-2xl p-4 pt-5 overflow-hidden text-left transition-all hover:shadow-md hover:-translate-y-0.5 ${
+        active ? 'border-transparent ring-2' : 'border-line'}`}
+      style={active ? { boxShadow: `0 0 0 2px ${to}` } : undefined}>
+      <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${from}, ${to})` }} />
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-white shadow-sm"
+          style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}>
+          {Icon && <Icon className="w-[18px] h-[18px]" />}
+        </div>
+        <div className="min-w-0">
+          <div className="text-xl font-bold text-ink leading-none">{value}</div>
+          <div className="text-xs text-slate-500 mt-1 truncate">{label}</div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function LeadCard({ lead, onMoved, canEdit, onDragStart, onDragEnd, dragging }) {
   const [moving, setMoving] = useState(false);
   const [moveError, setMoveError] = useState('');
 
@@ -75,14 +101,26 @@ function LeadCard({ lead, onMoved, canEdit }) {
       setMoveError(friendlyError(err, 'Could not move this lead.').message);
     } finally { setMoving(false); }
   };
-  return <LeadCardBody lead={lead} canEdit={canEdit} moving={moving} moveError={moveError} onMove={move} />;
+  return (
+    <LeadCardBody lead={lead} canEdit={canEdit} moving={moving} moveError={moveError} onMove={move}
+      onDragStart={onDragStart} onDragEnd={onDragEnd} dragging={dragging} />
+  );
 }
 
-function LeadCardBody({ lead, canEdit, moving, moveError, onMove }) {
+function LeadCardBody({ lead, canEdit, moving, moveError, onMove, onDragStart, onDragEnd, dragging }) {
   const followUp = lead.follow_up_date ? String(lead.follow_up_date).slice(0, 10) : null;
   const isToday = followUp === new Date().toISOString().slice(0, 10);
   return (
-    <Link to={`/leads/${lead.id}`} className="card card-hover p-3 block">
+    <Link to={`/leads/${lead.id}`}
+      draggable={canEdit}
+      onDragStart={(e) => {
+        // dataTransfer must be set for the drop to register in Firefox.
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(lead.id));
+        onDragStart?.(lead);
+      }}
+      onDragEnd={() => onDragEnd?.()}
+      className={`card card-hover p-3 block transition-opacity ${canEdit ? 'cursor-grab active:cursor-grabbing' : ''} ${dragging ? 'opacity-40' : ''}`}>
       <div className="flex items-start gap-2.5">
         <Avatar name={lead.student_name} size="sm" />
         <div className="min-w-0 flex-1">
@@ -133,23 +171,80 @@ function LeadCardBody({ lead, canEdit, moving, moveError, onMove }) {
 }
 
 function KanbanBoard({ leads, onAdd, canCreate, canEdit, onMoved }) {
+  // Drag-and-drop, implemented with the native HTML5 drag events rather
+  // than pulling in a drag library for one board.
+  //
+  // `optimistic` holds a pending {id -> status} override so the card jumps
+  // to the new column the instant you drop it, instead of sitting still
+  // until the server replies. If the save fails the override is discarded,
+  // the card snaps back to where it really is, and the error is surfaced —
+  // a card that silently stays moved while the database disagrees is worse
+  // than no drag at all.
+  const [dragLead, setDragLead] = useState(null);
+  const [dragOver, setDragOver] = useState(null);
+  const [optimistic, setOptimistic] = useState({});
+  const [dropError, setDropError] = useState('');
+
   const byStatus = useMemo(() => {
     const map = Object.fromEntries(STATUSES.map((s) => [s, []]));
     leads.forEach((l) => {
-      const key = STATUSES.includes(l.status) ? l.status : 'New';
+      const effective = optimistic[l.id] || l.status;
+      const key = STATUSES.includes(effective) ? effective : 'New';
       map[key].push(l);
     });
     return map;
-  }, [leads]);
+  }, [leads, optimistic]);
+
+  const handleDrop = async (status) => {
+    setDragOver(null);
+    const lead = dragLead;
+    setDragLead(null);
+    if (!lead || lead.status === status) return;
+
+    setOptimistic((o) => ({ ...o, [lead.id]: status }));
+    setDropError('');
+    try {
+      await api.updateLead(lead.id, { ...lead, status });
+      await onMoved?.();
+    } catch (err) {
+      setDropError(friendlyError(err, `Could not move ${lead.student_name}.`).message);
+    } finally {
+      // Cleared either way: on success the reloaded data already reflects
+      // the change, on failure the card must snap back to the truth.
+      setOptimistic((o) => {
+        const next = { ...o };
+        delete next[lead.id];
+        return next;
+      });
+    }
+  };
 
   return (
+    <>
+      {dropError && (
+        <div className="text-sm rounded-lg px-3 py-2 mb-3"
+          style={{ background: 'var(--color-danger-soft)', color: 'var(--color-danger)' }}>{dropError}</div>
+      )}
+      {canEdit && (
+        <p className="t-meta mb-2">Drag a card to another column to change its status.</p>
+      )}
     <div className="flex gap-4 overflow-x-auto thin-scroll pb-4 -mx-1 px-1">
       {STATUSES.map((status) => {
         const [soft, solid] = toneVars(status);
         const items = byStatus[status];
+        const isTarget = dragOver === status && dragLead && dragLead.status !== status;
         return (
-          <section key={status} className="w-[280px] shrink-0 rounded-xl flex flex-col"
-            style={{ background: soft, maxHeight: 'calc(100vh - 340px)' }}>
+          <section key={status} className="w-[280px] shrink-0 rounded-xl flex flex-col transition-all"
+            onDragOver={(e) => { if (canEdit && dragLead) { e.preventDefault(); setDragOver(status); } }}
+            onDragLeave={() => setDragOver((d) => (d === status ? null : d))}
+            onDrop={(e) => { e.preventDefault(); if (canEdit) handleDrop(status); }}
+            style={{
+              background: soft,
+              maxHeight: 'calc(100vh - 340px)',
+              outline: isTarget ? `2px dashed ${solid}` : 'none',
+              outlineOffset: '2px',
+              transform: isTarget ? 'translateY(-2px)' : 'none',
+            }}>
             <header className="px-3 pt-3 pb-2 shrink-0">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
@@ -167,7 +262,11 @@ function KanbanBoard({ leads, onAdd, canCreate, canEdit, onMoved }) {
             </header>
 
             <div className="px-2 pb-2 space-y-2 overflow-y-auto thin-scroll flex-1">
-              {items.map((l) => <LeadCard key={l.id} lead={l} canEdit={canEdit} onMoved={onMoved} />)}
+              {items.map((l) => (
+                <LeadCard key={l.id} lead={l} canEdit={canEdit} onMoved={onMoved}
+                  onDragStart={setDragLead} onDragEnd={() => { setDragLead(null); setDragOver(null); }}
+                  dragging={dragLead?.id === l.id} />
+              ))}
               {items.length === 0 && (
                 <p className="text-[11px] text-center py-6 opacity-60" style={{ color: solid }}>No leads</p>
               )}
@@ -185,6 +284,7 @@ function KanbanBoard({ leads, onAdd, canCreate, canEdit, onMoved }) {
         );
       })}
     </div>
+    </>
   );
 }
 
@@ -376,19 +476,28 @@ export default function Leads() {
       </PageHeader>
 
       {loading ? <SkeletonCards count={5} /> : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          <KpiCard label="Total Leads" value={kpis.total} icon={UsersIcon} tone="info" />
-          <KpiCard label="New" value={kpis.isNew} icon={Sparkles} tone="special" />
-          <KpiCard label="In Progress" value={kpis.progress} icon={TrendingUp} tone="warning" />
-          <KpiCard label="Converted" value={kpis.converted} icon={CheckCircle2} tone="success" />
-          <KpiCard label="Lost" value={kpis.lost} icon={XCircle} tone="danger" />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <LeadKpi label="Total Leads" value={kpis.total} icon={UsersIcon} from="#E879F9" to="#A21CAF"
+            active={!statusFilter} onClick={() => setStatusFilter('')} />
+          <LeadKpi label="New" value={kpis.isNew} icon={Sparkles} from="#93C5FD" to="#1D4ED8"
+            active={statusFilter === 'New'} onClick={() => setStatusFilter('New')} />
+          <LeadKpi label="In Progress" value={kpis.progress} icon={TrendingUp} from="#FCD34D" to="#B45309"
+            active={false} onClick={() => setStatusFilter('')} />
+          <LeadKpi label="Converted" value={kpis.converted} icon={CheckCircle2} from="#6EE7B7" to="#047857"
+            active={statusFilter === 'Converted'} onClick={() => setStatusFilter('Converted')} />
+          <LeadKpi label="Lost" value={kpis.lost} icon={XCircle} from="#FDA4AF" to="#BE123C"
+            active={statusFilter === 'Dropped'} onClick={() => setStatusFilter('Dropped')} />
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 mt-6 mb-5">
-        <div className="relative flex-1 min-w-[220px]">
+      {/* One compact toolbar. These were four full-width blocks stacked
+          vertically, pushing the actual leads far below the fold — caused
+          by `.input { width:100% }` outranking the `w-auto` already in the
+          markup (fixed in index.css). */}
+      <div className="flex flex-wrap items-center gap-2 mt-5 mb-4">
+        <div className="relative flex-1 min-w-[240px]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-faint)]" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} className="input pl-9"
+          <input value={q} onChange={(e) => setQ(e.target.value)} className="input w-full pl-9"
             placeholder="Search by name, email or phone…" aria-label="Search leads" />
         </div>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
@@ -407,6 +516,12 @@ export default function Leads() {
             <option value="">All Owners</option>
             {owners.map((o) => <option key={o}>{o}</option>)}
           </select>
+        )}
+        {(q || statusFilter || sourceFilter || ownerFilter) && (
+          <button onClick={() => { setQ(''); setStatusFilter(''); setSourceFilter(''); setOwnerFilter(''); }}
+            className="text-xs font-medium px-3 py-2 rounded-lg border border-line text-slate-500 hover:text-ink hover:bg-[var(--color-canvas)]">
+            Clear
+          </button>
         )}
       </div>
 
