@@ -3,13 +3,13 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, UserCheck, Phone, Mail, MessageCircle, CalendarClock, Pencil, Flame, Snowflake, Check, X,
   Info, PhoneCall, Calendar, CheckSquare, TrendingUp, Paperclip, StickyNote, LayoutGrid,
-  MapPin, FileText, Lightbulb, ChevronRight,
+  MapPin, FileText, Lightbulb, ChevronRight, Send,
 } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 import StatusBadge from '../components/StatusBadge';
 import DisposeLeadModal from '../components/DisposeLeadModal';
-import { accentGradient } from '../theme/moduleAccents';
+import { accentFor, accentGradient } from '../theme/moduleAccents';
 import { CallsTab, MeetingsTab, TasksTab, DocumentsTab, DealsTab, NotesTab } from '../components/LeadRelatedTabs';
 
 const FUNNEL_STAGES = ['New', 'Contacted', 'Interested', 'Follow-up', 'Converted'];
@@ -126,13 +126,29 @@ function SuggestedNextSteps({ scoring }) {
 }
 
 const QUICK_ACTIONS = [
-  { key: 'call', label: 'Log Call', icon: Phone, color: '#4F46E5' },
-  { key: 'email', label: 'Send Email', icon: Mail, color: '#2563EB' },
-  { key: 'meeting', label: 'Schedule Meeting', icon: Calendar, color: '#059669' },
-  { key: 'task', label: 'Create Task', icon: CheckSquare, color: '#D97706' },
-  { key: 'note', label: 'Add Note', icon: StickyNote, color: '#7C3AED' },
-  { key: 'document', label: 'Upload Document', icon: FileText, color: '#DB2777' },
+  { key: 'call', label: 'Log Call', icon: Phone, from: '#818CF8', to: '#4338CA' },
+  { key: 'email', label: 'Send Email', icon: Mail, from: '#93C5FD', to: '#1D4ED8' },
+  { key: 'meeting', label: 'Schedule Meeting', icon: Calendar, from: '#6EE7B7', to: '#047857' },
+  { key: 'task', label: 'Create Task', icon: CheckSquare, from: '#FCD34D', to: '#B45309' },
+  { key: 'note', label: 'Add Note', icon: StickyNote, from: '#C4B5FD', to: '#6D28D9' },
+  { key: 'document', label: 'Upload Document', icon: FileText, from: '#F9A8D4', to: '#BE185D' },
 ];
+
+// This module's identity colour, from the shared accent system — the same
+// fuchsia the sidebar and Leads list already use.
+const ACCENT = accentFor('leads');
+
+// One compact definition row. Every field rendered through this so label
+// and value alignment is identical everywhere, and an empty value always
+// renders as an em-dash rather than collapsing the row.
+function Row({ label, value, strong }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-slate-400 shrink-0">{label}</dt>
+      <dd className={`text-ink text-right truncate ${strong ? 'font-medium' : ''}`}>{value || '—'}</dd>
+    </div>
+  );
+}
 
 // Real prev/next navigation through the actual lead list.
 function usePrevNext(currentId) {
@@ -246,10 +262,19 @@ export default function LeadDetail() {
           going by a cropped view that read as solid purple; the complete
           image makes clear it's a white card with three distinctly
           coloured buttons and dark text). ===== */}
-      <div className="card p-5">
-        <div className="flex items-start justify-between flex-wrap gap-4">
+      <div className="card p-5 relative overflow-hidden">
+        {/* Top accent bar + a soft wash in the module's own colour. The
+            hero was pure white on a near-white page, so it had no presence
+            at all — this gives it weight without returning to the solid
+            purple block, which the reference showed was wrong. */}
+        <div className="absolute top-0 left-0 right-0 h-[3px]"
+          style={{ background: `linear-gradient(90deg, ${ACCENT.from}, ${ACCENT.to})` }} />
+        <div aria-hidden="true" className="absolute inset-0 pointer-events-none" style={{
+          background: `radial-gradient(ellipse 520px 200px at 0% 0%, ${ACCENT.solid}0E, transparent 70%)`,
+        }} />
+        <div className="relative flex items-start justify-between flex-wrap gap-4">
           <div className="flex items-start gap-3.5 min-w-0">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-white text-lg shrink-0"
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center font-bold text-white text-xl shrink-0 shadow-md"
               style={{ background: accentGradient('leads') }}>
               {initialsOf(lead.student_name)}
             </div>
@@ -419,140 +444,145 @@ export default function LeadDetail() {
       </div>
 
       {pageTab === 'overview' && (
-        <div className="grid lg:grid-cols-3 gap-5">
-          {/* LEFT: ONE consolidated "Basic Information" card, matching the
-              clearer reference exactly — it's a single larger card here,
-              not split across two. It also repeats Owner and Created On
-              (already in the header) the same way it repeats City — the
-              reference treats a quick-glance header value and the full
-              structured record as two legitimate, separate things, and
-              I'd wrongly tried to deduplicate that in an earlier round. */}
+        /* Two columns, not three.
+           Three equal columns meant three independently-growing stacks —
+           whichever ran out first left a tall hole beside the others, which
+           is the empty void in the screenshots. A 2/3 main area with an
+           internal 2-up grid lets the detail cards pack side by side
+           instead of stacking, so the page is materially shorter AND can't
+           leave a column-shaped gap. Denser padding and tighter gaps
+           throughout for the same reason. */
+        <>
+        <div className="card p-3 mb-4">
+          <div className="flex items-center gap-2 overflow-x-auto thin-scroll">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide shrink-0 pl-1 pr-2">Quick Actions</span>
+            {QUICK_ACTIONS.map((a) => (
+              <button key={a.key} onClick={() => runQuickAction(a.key)}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-line hover:shadow-md hover:-translate-y-0.5 transition-all shrink-0">
+                <span className="w-7 h-7 rounded-lg flex items-center justify-center text-white shadow-sm"
+                  style={{ background: `linear-gradient(135deg, ${a.from}, ${a.to})` }}>
+                  <a.icon className="w-3.5 h-3.5" />
+                </span>
+                <span className="text-xs font-medium text-ink whitespace-nowrap">{a.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid lg:grid-cols-[1.6fr_1fr] gap-4 items-start">
+
+          {/* MAIN */}
           <div className="space-y-4">
-            <div className="card p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase">Basic Information</h3>
-                {can('leads', 'edit') && (
-                  <button onClick={() => setEditing(true)} className="text-xs font-medium flex items-center gap-1" style={{ color: 'var(--color-brand)' }}>
-                    <Pencil className="w-3 h-3" /> Edit
-                  </button>
-                )}
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="card p-4">
+                <div className="flex items-center justify-between mb-2.5">
+                  <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Basic Information</h3>
+                  {can('leads', 'edit') && (
+                    <button onClick={() => setEditing(true)} className="text-xs font-medium flex items-center gap-1" style={{ color: 'var(--color-brand)' }}>
+                      <Pencil className="w-3 h-3" /> Edit
+                    </button>
+                  )}
+                </div>
+                <dl className="text-sm space-y-1.5">
+                  <Row label="Full Name" value={lead.student_name} strong />
+                  <Row label="Mobile" value={lead.mobile} />
+                  <Row label="Alternate Mobile" value={lead.alternate_mobile} />
+                  <Row label="Email" value={lead.email} />
+                  <Row label="City" value={lead.city} />
+                  <Row label="Source" value={lead.source} />
+                  <Row label="Created On" value={lead.created_at?.slice(0, 10)} />
+                  <Row label="Last Activity" value={lead.activities?.[0]
+                    ? `${lead.activities[0].type} on ${String(lead.activities[0].created_at).slice(0, 10)}` : null} />
+                  <Row label="Owner" value={lead.assigned_counselor} />
+                  <Row label="Lead ID" value={`L-${String(lead.id).padStart(4, '0')}`} />
+                </dl>
               </div>
-              <dl className="text-sm space-y-2">
-                <div className="flex justify-between"><dt className="text-slate-400">Full Name</dt><dd className="text-ink font-medium">{lead.student_name}</dd></div>
-                <div className="flex justify-between"><dt className="text-slate-400">Mobile</dt><dd className="text-ink">{lead.mobile || '—'}</dd></div>
-                <div className="flex justify-between"><dt className="text-slate-400">Alternate Mobile</dt><dd className="text-ink">{lead.alternate_mobile || '—'}</dd></div>
-                <div className="flex justify-between"><dt className="text-slate-400">Email</dt><dd className="text-ink truncate ml-2">{lead.email || '—'}</dd></div>
-                <div className="flex justify-between"><dt className="text-slate-400">City</dt><dd className="text-ink">{lead.city || '—'}</dd></div>
-                <div className="flex justify-between"><dt className="text-slate-400">Source</dt><dd className="text-ink">{lead.source || '—'}</dd></div>
-                <div className="flex justify-between"><dt className="text-slate-400">Created On</dt><dd className="text-ink">{lead.created_at?.slice(0, 10)}</dd></div>
-                <div className="flex justify-between">
-                  <dt className="text-slate-400">Last Activity</dt>
-                  <dd className="text-ink text-right">
-                    {lead.activities?.[0] ? `${lead.activities[0].type} on ${String(lead.activities[0].created_at).slice(0, 10)}` : '—'}
-                  </dd>
+
+              <div className="space-y-4">
+                <div className="card p-4">
+                  <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2.5">Additional Details</h3>
+                  <dl className="text-sm space-y-1.5">
+                    <Row label="Product Interest" value={lead.product_interest} />
+                    <Row label="Service Interest" value={lead.service_interest} />
+                    <Row label="Campaign" value={lead.campaign} />
+                    <Row label="Lead Rating" value={lead.lead_rating} />
+                  </dl>
                 </div>
-                <div className="flex justify-between">
-                  <dt className="text-slate-400">Owner</dt>
-                  <dd className="text-ink">{lead.assigned_counselor || '—'}
-                    {can('leads', 'edit') && <button className="ml-1.5 text-xs" style={{ color: 'var(--color-brand)' }}>Change</button>}
-                  </dd>
+
+                <div className="card p-4">
+                  <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2.5">Personal Information</h3>
+                  <dl className="text-sm space-y-1.5">
+                    <Row label="Gender" value={lead.gender} />
+                    <Row label="Date of Birth" value={lead.date_of_birth} />
+                  </dl>
                 </div>
-                <div className="flex justify-between"><dt className="text-slate-400">Lead ID</dt><dd className="text-ink">L-{String(lead.id).padStart(4, '0')}</dd></div>
-              </dl>
+              </div>
             </div>
 
             {can('leads', 'edit') && !lead.converted_contact_id && (
               <div className="card p-4">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Change Status</h3>
+                <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2.5">Change Status</h3>
                 <div className="flex flex-wrap gap-1.5">
-                  {ALL_STATUSES.map((s) => (
-                    <button key={s} onClick={() => changeStatus(s)}
-                      className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
-                        lead.status === s ? 'bg-emerald-50 border-good text-good' : 'border-line text-slate-500 hover:border-ink/40'
-                      }`}>
-                      {s}
+                  {ALL_STATUSES.map((st) => (
+                    <button key={st} onClick={() => changeStatus(st)}
+                      className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                        lead.status === st ? 'text-white border-transparent' : 'border-line text-slate-500 hover:border-ink/40'
+                      }`}
+                      style={lead.status === st ? { background: ACCENT.solid } : undefined}>
+                      {st}
                     </button>
                   ))}
                 </div>
               </div>
             )}
-          </div>
-
-          {/* CENTER: Additional Details + Personal Information — matching
-              the reference's actual field set. The reference also shows
-              Budget, Expected Closure, Preferred Contact Time and Lead
-              Category on this card, and Occupation/Organization on
-              Personal Information — none of those exist as real columns
-              on this lead record, and section 10 of the brief is explicit
-              about not inventing business data, so they're left out rather
-              than shown as fake empty fields. Lead Rating IS a real column
-              and is now shown, as plain text rather than a 1–5 star
-              widget — the underlying value is a category (Hot/Warm/Cold),
-              not a numeric rating, and a star widget would imply a
-              precision the data doesn't have. */}
-          <div className="space-y-4">
-            <div className="card p-4">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Additional Details</h3>
-              <dl className="text-sm space-y-2">
-                <div className="flex justify-between"><dt className="text-slate-400">Product Interest</dt><dd className="text-ink">{lead.product_interest || '—'}</dd></div>
-                <div className="flex justify-between"><dt className="text-slate-400">Service Interest</dt><dd className="text-ink">{lead.service_interest || '—'}</dd></div>
-                <div className="flex justify-between"><dt className="text-slate-400">Campaign</dt><dd className="text-ink">{lead.campaign || '—'}</dd></div>
-                <div className="flex justify-between"><dt className="text-slate-400">Lead Rating</dt><dd className="text-ink">{lead.lead_rating || '—'}</dd></div>
-              </dl>
-            </div>
-
-            <div className="card p-4">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Personal Information</h3>
-              <dl className="text-sm space-y-2">
-                <div className="flex justify-between"><dt className="text-slate-400">Gender</dt><dd className="text-ink">{lead.gender || '—'}</dd></div>
-                <div className="flex justify-between"><dt className="text-slate-400">Date of Birth</dt><dd className="text-ink">{lead.date_of_birth || '—'}</dd></div>
-              </dl>
-            </div>
-          </div>
-
-                    {/* RIGHT: Lead Score & Insights, Recent Activity — matching the
-              reference's confirmed order — then Quick Actions, Suggested
-              Next Steps and Related Deals, which section 11/12/15 of the
-              brief call for beyond what the reference crop captured. */}
-          <div className="space-y-4">
-            <ScoreInsightsCard scoring={scoring} />
 
             <div className="card p-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase">Recent Activity</h3>
+                <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Recent Activity</h3>
                 <button onClick={() => setPageTab('activity')} className="text-xs font-medium" style={{ color: 'var(--color-brand)' }}>View all →</button>
               </div>
-              <div className="space-y-2">
-                {lead.activities.slice(0, 4).map((a) => (
-                  <div key={a.id} className="text-sm border-l-2 border-line pl-3">
-                    <div className="text-ink truncate">{a.note}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">{a.type} · {a.created_at}</div>
-                  </div>
-                ))}
-                {lead.activities.length === 0 && <p className="text-sm text-slate-400">Nothing here yet.</p>}
-              </div>
-            </div>
-
-            <div className="card p-4">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase mb-3">Quick Actions</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {QUICK_ACTIONS.map((a) => (
-                  <button key={a.key} onClick={() => runQuickAction(a.key)}
-                    className="flex flex-col items-start gap-2 p-3 rounded-xl border border-line hover:shadow-sm transition-shadow text-left">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${a.color}18`, color: a.color }}>
-                      <a.icon className="w-4 h-4" />
+              {lead.activities.length === 0 ? (
+                <div className="text-center py-5">
+                  <p className="t-meta mb-2.5">Nothing logged yet.</p>
+                  {can('leads', 'edit') && (
+                    <button onClick={() => { setPageTab('activity'); setTab('note'); }}
+                      className="text-sm font-semibold px-4 py-2 rounded-xl"
+                      style={{ background: `${ACCENT.solid}14`, color: ACCENT.solid }}>
+                      Log the first activity
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {lead.activities.slice(0, 5).map((a, i) => (
+                    <div key={a.id} className="flex gap-3">
+                      <div className="flex flex-col items-center shrink-0">
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center"
+                          style={{ background: `${ACCENT.solid}1A`, color: ACCENT.solid }}>
+                          <Send className="w-3 h-3" />
+                        </div>
+                        {i < Math.min(lead.activities.length, 5) - 1 && <div className="w-px flex-1 bg-line mt-1" />}
+                      </div>
+                      <div className="min-w-0 pb-1">
+                        <div className="text-sm text-ink">{a.note}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">{a.type} · {a.created_at}</div>
+                      </div>
                     </div>
-                    <span className="text-xs font-medium text-ink leading-tight">{a.label}</span>
-                  </button>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
+          </div>
+
+          {/* SIDEBAR */}
+          <div className="space-y-4">
+            <ScoreInsightsCard scoring={scoring} />
 
             <SuggestedNextSteps scoring={scoring} />
 
             <div className="card p-4">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase">Related Deals</h3>
+                <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Related Deals</h3>
                 {!lead.converted_contact_id && can('leads', 'edit') && (
                   <button onClick={convert} className="text-xs font-medium" style={{ color: 'var(--color-brand)' }}>Convert to create →</button>
                 )}
@@ -561,6 +591,7 @@ export default function LeadDetail() {
             </div>
           </div>
         </div>
+        </>
       )}
 
       {pageTab === 'activity' && (
