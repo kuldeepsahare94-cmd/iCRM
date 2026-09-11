@@ -11,6 +11,7 @@ import GlobalSearch from './GlobalSearch';
 import NotificationBell from './NotificationBell';
 import AssistantWidget from './AssistantWidget';
 import { ModuleIcon } from './moduleIcons';
+import { accentFor } from '../theme/moduleAccents';
 import { Avatar } from './ui';
 import ErrorBoundary from './ErrorBoundary';
 
@@ -20,17 +21,17 @@ import ErrorBoundary from './ErrorBoundary';
 // pass only restyles how these render.
 const links = [
   { to: '/', label: 'Dashboard', end: true, icon: LayoutDashboard },
-  { to: '/leads', label: 'Leads', icon: UsersIcon },
-  { to: '/inbox', label: 'Inbox', icon: Inbox },
-  { to: '/email-campaigns', label: 'Campaigns', icon: Megaphone },
-  { to: '/payments', label: 'Payments', icon: Wallet },
+  { to: '/leads', label: 'Leads', icon: UsersIcon, accent: 'leads' },
+  { to: '/inbox', label: 'Inbox', icon: Inbox, accent: 'emails' },
+  { to: '/email-campaigns', label: 'Campaigns', icon: Megaphone, accent: 'notes' },
+  { to: '/payments', label: 'Payments', icon: Wallet, accent: 'payments' },
 ];
 
 const ADMIN_LINKS = [
   { to: '/lead-sources', label: 'Lead Sources', icon: Radio },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
-  { to: '/call-reports', label: 'Call Reports', icon: PhoneCall },
-  { to: '/whatsapp', label: 'WhatsApp', icon: MessageCircle },
+  { to: '/call-reports', label: 'Call Reports', icon: PhoneCall, accent: 'calls' },
+  { to: '/whatsapp', label: 'WhatsApp', icon: MessageCircle, accent: 'emails' },
   { to: '/users', label: 'Users', icon: UserCog },
   { to: '/roles', label: 'Roles & Permissions', icon: ShieldCheck },
   { to: '/appearance', label: 'Appearance', icon: Palette },
@@ -64,6 +65,21 @@ const navItem = ({ isActive }) =>
       ? 'bg-[#3B5BFF] text-white shadow-[0_4px_12px_rgba(59,91,255,0.35)]'
       : 'text-[#AAB4D4] hover:bg-white/[0.06] hover:text-white'
   }`;
+
+// Every nav row's icon sits in a small tinted chip using that module's own
+// accent colour — the sidebar previously used one flat grey icon for every
+// module, which is exactly the "everything looks the same" problem being
+// fixed here. The active row's solid-blue pill still reads as the one
+// unambiguous "current page" signal; the chip is identity, not state.
+function NavIcon({ Icon, accentKey, active }) {
+  const a = accentFor(accentKey);
+  return (
+    <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+      style={active ? { background: 'rgba(255,255,255,0.18)' } : { background: `${a.solid}26`, color: a.solid }}>
+      <Icon className="w-[15px] h-[15px]" style={active ? { color: '#fff' } : undefined} />
+    </span>
+  );
+}
 
 function GroupLabel({ children }) {
   return (
@@ -106,8 +122,9 @@ function SidebarContent({ onNavigate, showClose, onClose }) {
       <nav className="flex-1 py-2 overflow-y-auto thin-scroll" aria-label="Main navigation">
         {links.map((l) => (
           <NavLink key={l.to} to={l.to} end={l.end} onClick={onNavigate} className={navItem}>
-            <l.icon className="w-[18px] h-[18px] shrink-0" />
-            {l.label}
+            {({ isActive }) => (
+              <><NavIcon Icon={l.icon} accentKey={l.accent || 'tasks'} active={isActive} />{l.label}</>
+            )}
           </NavLink>
         ))}
 
@@ -116,8 +133,9 @@ function SidebarContent({ onNavigate, showClose, onClose }) {
             <GroupLabel>{group}</GroupLabel>
             {mods.map((m) => (
               <NavLink key={m.api_name} to={`/records/${m.api_name}`} onClick={onNavigate} className={navItem}>
-                <ModuleIcon name={m.icon} className="w-[18px] h-[18px] shrink-0" />
-                {m.plural_label}
+                {({ isActive }) => (
+                  <><NavIcon Icon={(p) => <ModuleIcon name={m.icon} {...p} />} accentKey={m.api_name} active={isActive} />{m.plural_label}</>
+                )}
               </NavLink>
             ))}
           </div>
@@ -126,8 +144,9 @@ function SidebarContent({ onNavigate, showClose, onClose }) {
         <GroupLabel>Administration</GroupLabel>
         {ADMIN_LINKS.map((l) => (
           <NavLink key={l.to} to={l.to} onClick={onNavigate} className={navItem}>
-            <l.icon className="w-[18px] h-[18px] shrink-0" />
-            {l.label}
+            {({ isActive }) => (
+              <><NavIcon Icon={l.icon} accentKey={l.accent || 'documents'} active={isActive} />{l.label}</>
+            )}
           </NavLink>
         ))}
       </nav>

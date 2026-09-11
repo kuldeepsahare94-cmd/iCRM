@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { Kanban as KanbanIcon, Search, MoreHorizontal, Eye, Pencil, LayoutGrid } from 'lucide-react';
 import { ModuleIcon } from '../../components/moduleIcons';
+import { accentGradient } from '../../theme/moduleAccents';
+import QuotationItemsEditor from './QuotationItemsEditor';
 import { api } from '../../api';
 import { usePermissions } from '../../context/usePermissions';
 import StatusBadge from '../../components/StatusBadge';
@@ -25,6 +27,12 @@ export default function UniversalList() {
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
   const [showForm, setShowForm] = useState(false);
+  // Quotation line items live outside `form` because they're a child
+  // collection, not a column on the record.
+  const [quoteItems, setQuoteItems] = useState([]);
+  const [discountType, setDiscountType] = useState('percent');
+  const [discountValue, setDiscountValue] = useState(0);
+  const isQuotations = moduleApiName === 'quotations';
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
@@ -119,8 +127,25 @@ export default function UniversalList() {
     e.preventDefault();
     setSaving(true);
     try {
-      await api.universalCreate(module, form);
+      const payload = isQuotations
+        ? {
+          ...form,
+          items: quoteItems.map((i) => ({
+            product_id: i.product_id || null,
+            description: i.description || null,
+            quantity: Number(i.quantity) || 0,
+            unit_price: Number(i.unit_price) || 0,
+            discount_percent: Number(i.discount_percent) || 0,
+            tax_percent: Number(i.tax_percent) || 0,
+          })),
+          overall_discount_type: discountType,
+          overall_discount_value: Number(discountValue) || 0,
+        }
+        : form;
+      await api.universalCreate(module, payload);
       setForm({});
+      setQuoteItems([]);
+      setDiscountValue(0);
       setShowForm(false);
       load();
     } catch (err) {
@@ -142,7 +167,8 @@ export default function UniversalList() {
     <div className="max-w-[1600px] mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${module.color}22`, color: module.color }}>
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-white shadow-sm"
+            style={{ background: module.color ? `${module.color}` : accentGradient(module.api_name) }}>
             <ModuleIcon name={module.icon} className="w-5 h-5" />
           </div>
           <div>
@@ -198,6 +224,13 @@ export default function UniversalList() {
               <FieldInput field={f} value={form[f.api_name]} onChange={(v) => setForm({ ...form, [f.api_name]: v })} />
             </div>
           ))}
+          {isQuotations && (
+            <QuotationItemsEditor
+              items={quoteItems} setItems={setQuoteItems}
+              discountType={discountType} setDiscountType={setDiscountType}
+              discountValue={discountValue} setDiscountValue={setDiscountValue}
+            />
+          )}
           <button type="submit" disabled={saving} className="col-span-2 bg-amber text-white text-sm font-medium py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
             {saving ? 'Saving…' : `Save ${singularLabel.toLowerCase()}`}
           </button>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import {
   Users, TrendingUp, CalendarClock, IndianRupee, Target, CheckCircle2, Trophy,
@@ -18,13 +18,13 @@ const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 // KpiCard, which takes a different `tone` prop shape) — mixing the two
 // shapes is exactly what crashed this page once before.
 const COLORS = {
-  amber: { bar: '#F59E0B', chipBg: '#FEF3C7', chipText: '#B45309' },
-  indigo: { bar: '#6366F1', chipBg: '#E0E7FF', chipText: '#4338CA' },
-  teal: { bar: '#14B8A6', chipBg: '#CCFBF1', chipText: '#0F766E' },
-  emerald: { bar: '#10B981', chipBg: '#D1FAE5', chipText: '#047857' },
-  blue: { bar: '#3B82F6', chipBg: '#DBEAFE', chipText: '#1D4ED8' },
-  rose: { bar: '#F43F5E', chipBg: '#FFE4E6', chipText: '#BE123C' },
-  violet: { bar: '#8B5CF6', chipBg: '#EDE9FE', chipText: '#6D28D9' },
+  amber:   { bar: '#F59E0B', chipBg: '#FEF3C7', chipText: '#B45309', from: '#FCD34D', to: '#D97706' },
+  indigo:  { bar: '#6366F1', chipBg: '#E0E7FF', chipText: '#4338CA', from: '#818CF8', to: '#4338CA' },
+  teal:    { bar: '#14B8A6', chipBg: '#CCFBF1', chipText: '#0F766E', from: '#5EEAD4', to: '#0F766E' },
+  emerald: { bar: '#10B981', chipBg: '#D1FAE5', chipText: '#047857', from: '#6EE7B7', to: '#047857' },
+  blue:    { bar: '#3B82F6', chipBg: '#DBEAFE', chipText: '#1D4ED8', from: '#93C5FD', to: '#1D4ED8' },
+  rose:    { bar: '#F43F5E', chipBg: '#FFE4E6', chipText: '#BE123C', from: '#FDA4AF', to: '#BE123C' },
+  violet:  { bar: '#8B5CF6', chipBg: '#EDE9FE', chipText: '#6D28D9', from: '#C4B5FD', to: '#6D28D9' },
 };
 // Fixed stage-colour palette used only when a pipeline stage has no colour
 // configured in Settings — matches the reference donut's blue/pink/purple/
@@ -35,9 +35,13 @@ const TONE_TO_COLOR = { success: 'emerald', danger: 'rose', warning: 'amber', in
 function KpiCard({ label, value, sub, trend, icon: Icon, color, tone, to }) {
   const palette = color || COLORS[TONE_TO_COLOR[tone]] || COLORS.indigo;
   const body = (
-    <div className="relative bg-white border border-line rounded-2xl p-5 hover:shadow-md hover:-translate-y-0.5 transition-all h-full">
-      <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 mb-4"
-        style={{ background: palette.chipBg, color: palette.chipText }}>
+    <div className="relative bg-white border border-line rounded-2xl p-5 pt-6 overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all h-full">
+      {/* Colour-matched top accent — the one-pixel-line-of-colour-and-
+          everything-else-grey pattern was a big part of why the page read
+          as dull; this gives every card a real, if restrained, presence. */}
+      <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${palette.from}, ${palette.to})` }} />
+      <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 mb-4 text-white shadow-sm"
+        style={{ background: `linear-gradient(135deg, ${palette.from}, ${palette.to})` }}>
         {Icon && <Icon className="w-5 h-5" />}
       </div>
       <div className="text-[13px] text-slate-500 font-medium">{label}</div>
@@ -311,13 +315,20 @@ function CrmDashboardSection({ data }) {
           </div>
           <p className="text-xs text-slate-400 mb-4">Subscription payments collected, last 6 months</p>
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={data.revenue_by_month}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-line)" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`} />
+            <AreaChart data={data.revenue_by_month}>
+              <defs>
+                <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#4F46E5" stopOpacity={0.28} />
+                  <stop offset="100%" stopColor="#4F46E5" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-line)" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`} />
               <Tooltip formatter={(v) => inr(v)} />
-              <Line type="monotone" dataKey="revenue" stroke="#4F46E5" strokeWidth={2.5} dot={{ fill: '#4F46E5', r: 4 }} activeDot={{ r: 6 }} />
-            </LineChart>
+              <Area type="monotone" dataKey="revenue" stroke="#4F46E5" strokeWidth={2.5} fill="url(#revenueFill)"
+                dot={{ fill: '#4F46E5', r: 4, strokeWidth: 0 }} activeDot={{ r: 6 }} />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
 
@@ -373,7 +384,8 @@ export default function Dashboard() {
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <div className="max-w-[1600px] mx-auto">
+    <div className="max-w-[1600px] mx-auto rounded-3xl -m-4 sm:-m-6 p-4 sm:p-6"
+      style={{ background: 'radial-gradient(ellipse 1400px 500px at top, var(--color-brand-soft), transparent 60%)' }}>
       <div className="rounded-2xl p-6 mb-2 relative overflow-hidden"
         style={{ background: 'linear-gradient(135deg, var(--color-brand-soft), #FFFFFF)' }}>
         {/* Small decorative "goal" illustration — mirrors the reference's

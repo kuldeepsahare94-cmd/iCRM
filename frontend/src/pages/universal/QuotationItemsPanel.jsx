@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, GripVertical, Save } from 'lucide-react';
 import { api } from '../../api';
 import { friendlyError } from '../../components/ui';
+import { computeTotals } from './QuotationItemsEditor';
 
 /* ---------------------------------------------------------------------------
    Quotation line items.
@@ -35,17 +36,6 @@ export function lineTotals(item) {
   return { gross, discount, net, tax, total: net + tax };
 }
 
-export function quotationTotals(items) {
-  return items.reduce((acc, item) => {
-    const t = lineTotals(item);
-    acc.subtotal += t.gross;
-    acc.discount += t.discount;
-    acc.tax += t.tax;
-    acc.grand += t.total;
-    return acc;
-  }, { subtotal: 0, discount: 0, tax: 0, grand: 0 });
-}
-
 const money = (n, currency = 'INR') =>
   `${currency === 'INR' ? '₹' : ''}${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -58,10 +48,14 @@ export default function QuotationItemsPanel({ quotationId, currency = 'INR', can
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState(null);
   const [serverTotals, setServerTotals] = useState(null);
+  const [discountType, setDiscountType] = useState('percent');
+  const [discountValue, setDiscountValue] = useState(0);
 
   const load = () => api.universalGet({ api_name: 'quotations', table_name: 'quotations' }, quotationId)
     .then((q) => {
       setItems((q.items || []).map((i) => ({ ...i })));
+      setDiscountType(q.overall_discount_type || 'percent');
+      setDiscountValue(q.overall_discount_value ?? 0);
       setServerTotals({ subtotal: q.subtotal, discount: q.total_discount, tax: q.tax_total, grand: q.grand_total });
       setDirty(false);
     })
@@ -94,7 +88,7 @@ export default function QuotationItemsPanel({ quotationId, currency = 'INR', can
   const addItem = () => { setItems((p) => [...p, blankItem()]); setDirty(true); };
   const removeItem = (idx) => { setItems((p) => p.filter((_, i) => i !== idx)); setDirty(true); };
 
-  const totals = useMemo(() => quotationTotals(items), [items]);
+  const totals = useMemo(() => computeTotals(items, discountType, discountValue), [items, discountType, discountValue]);
 
   const save = async () => {
     setSaving(true); setMessage(null);
@@ -107,7 +101,11 @@ export default function QuotationItemsPanel({ quotationId, currency = 'INR', can
         discount_percent: Number(i.discount_percent) || 0,
         tax_percent: Number(i.tax_percent) || 0,
       }));
-      await api.universalUpdate({ api_name: 'quotations', table_name: 'quotations' }, quotationId, { items: payload });
+      await api.universalUpdate({ api_name: 'quotations', table_name: 'quotations' }, quotationId, {
+        items: payload,
+        overall_discount_type: discountType,
+        overall_discount_value: Number(discountValue) || 0,
+      });
       await load();
       setMessage({ ok: true, text: 'Line items saved. Totals recalculated by the server.' });
       onSaved?.();
@@ -226,11 +224,29 @@ export default function QuotationItemsPanel({ quotationId, currency = 'INR', can
       <div className="mt-4 pt-3 border-t border-line flex justify-end">
         <div className="w-full sm:w-72 space-y-1 text-sm">
           <div className="flex justify-between"><span className="t-meta">Subtotal</span><span className="tabular-nums">{money(totals.subtotal, currency)}</span></div>
-          {totals.discount > 0 && (
-            <div className="flex justify-between"><span className="t-meta">Discount</span><span className="tabular-nums" style={{ color: 'var(--color-success)' }}>− {money(totals.discount, currency)}</span></div>
+          {totals.lineDiscountTotal > 0 && (
+            <div className="flex justify-between"><span className="t-meta">Line discounts</span><span className="tabular-nums" style={{ color: 'var(--color-success)' }}>− {money(totals.lineDiscountTotal, currency)}</span></div>
+          )}
+          {canEdit && (
+            <div className="flex justify-between items-center gap-2">
+              <span className="t-meta shrink-0">Overall discount</span>
+              <div className="flex items-center gap-1">
+                <select value={discountType} onChange={(e) => { setDiscountType(e.target.value); setDirty(true); }}
+                  className="border border-line rounded-md px-1.5 py-1 text-xs" aria-label="Overall discount type">
+                  <option value="percent">%</option>
+                  <option value="amount">₹</option>
+                </select>
+                <input type="number" min="0" step="any" value={discountValue ?? 0}
+                  onChange={(e) => { setDiscountValue(e.target.value); setDirty(true); }}
+                  className="border border-line rounded-md px-2 py-1 text-sm w-20 text-right" aria-label="Overall discount value" />
+              </div>
+            </div>
+          )}
+          {totals.overall > 0 && (
+            <div className="flex justify-between"><span className="t-meta">Overall discount applied</span><span className="tabular-nums" style={{ color: 'var(--color-success)' }}>− {money(totals.overall, currency)}</span></div>
           )}
           {totals.tax > 0 && (
-            <div className="flex justify-between"><span className="t-meta">Tax</span><span className="tabular-nums">{money(totals.tax, currency)}</span></div>
+            <div className="flex justify-between"><span className="t-meta">GST</span><span className="tabular-nums">{money(totals.tax, currency)}</span></div>
           )}
           <div className="flex justify-between pt-1.5 border-t border-line font-semibold text-ink">
             <span>Grand total</span><span className="tabular-nums">{money(totals.grand, currency)}</span>

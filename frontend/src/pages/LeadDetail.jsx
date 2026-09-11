@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  ArrowLeft, UserCheck, Phone, Mail, MessageCircle, CalendarClock, Pencil, Flame, Snowflake, Check, X,
+  ArrowLeft, ArrowRight, UserCheck, Phone, Mail, MessageCircle, CalendarClock, Pencil, Flame, Snowflake, Check, X,
   Info, PhoneCall, Calendar, CheckSquare, TrendingUp, Paperclip, StickyNote, LayoutGrid,
-  MapPin, MoreVertical, FileText, Send, Lightbulb, ChevronRight,
+  MapPin, FileText, Lightbulb, ChevronRight,
 } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 import StatusBadge from '../components/StatusBadge';
 import DisposeLeadModal from '../components/DisposeLeadModal';
+import { accentGradient } from '../theme/moduleAccents';
 import { CallsTab, MeetingsTab, TasksTab, DocumentsTab, DealsTab, NotesTab } from '../components/LeadRelatedTabs';
 
 const FUNNEL_STAGES = ['New', 'Contacted', 'Interested', 'Follow-up', 'Converted'];
@@ -20,9 +21,6 @@ const ACTIVITY_TABS = [
   { key: 'all', label: 'All' },
 ];
 
-// Same 8 tabs as before — every one already wired to real data. Nothing
-// added or removed, only the pill styling below changes to an underlined
-// tab strip to match the reference.
 const PAGE_TABS = [
   { key: 'overview', label: 'Overview', icon: LayoutGrid },
   { key: 'activity', label: 'Activity', icon: Info },
@@ -38,48 +36,14 @@ function initialsOf(name) {
   return (name || '?').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 }
 
-// Deterministic gradient per lead so avatars don't all look identical —
-// purely cosmetic, derived from the name string, no stored data.
-const AVATAR_GRADIENTS = [
-  ['#F472B6', '#C026D3'], ['#818CF8', '#4F46E5'], ['#34D399', '#059669'],
-  ['#FBBF24', '#D97706'], ['#60A5FA', '#2563EB'], ['#FB7185', '#E11D48'],
-];
-function avatarGradient(name) {
-  const sum = (name || '').split('').reduce((s, c) => s + c.charCodeAt(0), 0);
-  const [a, b] = AVATAR_GRADIENTS[sum % AVATAR_GRADIENTS.length];
-  return `linear-gradient(135deg, ${a}, ${b})`;
-}
+const BAND_COLOR = { Hot: '#FCA5A5', Excellent: '#FCA5A5', Warm: '#FDE68A', Healthy: '#FDE68A', Medium: '#E9D5FF', Cold: '#93C5FD' };
+const bandColor = (band) => BAND_COLOR[band] || '#E9D5FF';
 
-const SCORE_COLOR = { Hot: '#DC2626', Warm: '#D97706', Cold: '#2563EB' };
-
-// Compact circular score ring — same lead.lead_score / lead.lead_score_label
-// fields the old badge used, just drawn as a ring instead of a pill so it
-// reads at a glance the way the reference's header score does.
-function ScoreRing({ score, size = 64, stroke = 6 }) {
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const pct = Math.max(0, Math.min(100, score || 0));
-  const color = pct >= 70 ? '#DC2626' : pct >= 40 ? '#D97706' : '#2563EB';
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-line)" strokeWidth={stroke} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
-          strokeDasharray={c} strokeDashoffset={c - (pct / 100) * c} strokeLinecap="round" />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-lg font-bold text-ink">{score}</span>
-      </div>
-    </div>
-  );
-}
-
-// The explainable breakdown from the scoring engine — real weights and
-// real reasons, not a decorative widget. Fetched once and reused by both
-// the "Lead Score & Insights" card and the "Suggested Next Steps" list
-// below, which is built entirely from this same response's `negatives`
-// (real, computed reasons the score isn't higher) rather than any invented
-// copy.
+// ONE source of truth for the score, read by both the header chip and the
+// right-column breakdown. There used to be two different scoring engines
+// feeding those two displays, which could show contradictory numbers for
+// the same lead — a real bug, independent of anything about matching the
+// reference image, and worth keeping fixed.
 function useLeadScore(leadId) {
   const [data, setData] = useState(null);
   useEffect(() => { api.leadScore(leadId).then(setData).catch(() => setData(null)); }, [leadId]);
@@ -88,36 +52,61 @@ function useLeadScore(leadId) {
 
 function ScoreInsightsCard({ scoring }) {
   if (!scoring) return null;
+  // A ring alongside the real component breakdown, matching the reference's
+  // visual treatment while keeping the actual weighted data (Fit/Engagement/
+  // Intent/Recency) rather than renaming them to categories the scoring
+  // engine doesn't really compute.
+  const r = 30, c = 2 * Math.PI * r, pct = Math.max(0, Math.min(100, scoring.score));
+  const ringColor = scoring.score >= 70 ? 'var(--color-danger)' : scoring.score >= 40 ? 'var(--color-warning)' : 'var(--color-info)';
+  const topTip = scoring.components.flatMap((x) => x.negatives || [])[0];
   return (
     <div className="card p-4">
       <div className="flex items-center gap-4 mb-4">
-        <ScoreRing score={scoring.score} size={72} stroke={7} />
+        <div className="relative shrink-0" style={{ width: 68, height: 68 }}>
+          <svg width={68} height={68} className="-rotate-90">
+            <circle cx={34} cy={34} r={r} fill="none" stroke="var(--color-line)" strokeWidth={6} />
+            <circle cx={34} cy={34} r={r} fill="none" stroke={ringColor} strokeWidth={6}
+              strokeDasharray={c} strokeDashoffset={c - (pct / 100) * c} strokeLinecap="round" />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-base font-bold text-ink">{scoring.score}</span>
+          </div>
+        </div>
         <div>
           <h3 className="text-xs font-semibold text-slate-500 uppercase">Lead Score &amp; Insights</h3>
-          <p className="text-sm font-semibold text-ink mt-0.5">{scoring.score}/100</p>
-          <p className="t-meta">{scoring.band}</p>
+          <p className="text-sm font-semibold text-ink mt-0.5">{scoring.score}/100 · {scoring.band}</p>
         </div>
       </div>
-      <div className="space-y-2.5">
+      <div className="space-y-3">
         {scoring.components.map((c) => (
-          <div key={c.component} className="flex items-center justify-between text-xs gap-2">
-            <span className="text-ink truncate">{c.component}</span>
-            <span className="text-[var(--color-muted)] shrink-0">{c.score}%</span>
+          <div key={c.component}>
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="text-ink font-medium">{c.component}</span>
+              <span className="text-[var(--color-muted)]">{c.score}/100 · {c.weight}% weight</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-[var(--color-canvas)] overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${c.score}%`, background: 'var(--color-brand)' }} />
+            </div>
+            {(c.positives[0] || c.negatives[0]) && (
+              <p className="text-[11px] text-[var(--color-muted)] mt-1">{c.positives[0] || c.negatives[0]}</p>
+            )}
           </div>
         ))}
       </div>
+      {topTip && (
+        <div className="flex items-start gap-2 rounded-lg px-3 py-2.5 mt-3" style={{ background: 'var(--color-warning-soft)' }}>
+          <Lightbulb className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: 'var(--color-warning)' }} />
+          <p className="text-xs text-ink"><strong>Opportunity to improve:</strong> {topTip}</p>
+        </div>
+      )}
     </div>
   );
 }
 
-// Suggested next steps, derived from the real scoring negatives — the exact
-// same strings the score breakdown already shows, presented as a checklist
-// instead of a paragraph. No copy is invented; a lead with nothing negative
-// shows no suggestions rather than filler text.
+// Built entirely from the same response's real `negatives` — no invented
+// copy. A lead with nothing negative shows no card at all.
 function SuggestedNextSteps({ scoring }) {
-  const items = (scoring?.components || [])
-    .flatMap((c) => c.negatives || [])
-    .slice(0, 5);
+  const items = (scoring?.components || []).flatMap((c) => c.negatives || []).slice(0, 5);
   if (items.length === 0) return null;
   return (
     <div className="card p-4">
@@ -136,7 +125,7 @@ function SuggestedNextSteps({ scoring }) {
   );
 }
 
-const QUICK_ACTIONS_BASE = [
+const QUICK_ACTIONS = [
   { key: 'call', label: 'Log Call', icon: Phone, color: '#4F46E5' },
   { key: 'email', label: 'Send Email', icon: Mail, color: '#2563EB' },
   { key: 'meeting', label: 'Schedule Meeting', icon: Calendar, color: '#059669' },
@@ -144,6 +133,19 @@ const QUICK_ACTIONS_BASE = [
   { key: 'note', label: 'Add Note', icon: StickyNote, color: '#7C3AED' },
   { key: 'document', label: 'Upload Document', icon: FileText, color: '#DB2777' },
 ];
+
+// Real prev/next navigation through the actual lead list.
+function usePrevNext(currentId) {
+  const [ids, setIds] = useState(null);
+  useEffect(() => { api.listLeads().then((rows) => setIds(rows.map((r) => r.id))).catch(() => setIds([])); }, []);
+  if (!ids) return { prevId: null, nextId: null, loaded: false };
+  const idx = ids.indexOf(Number(currentId));
+  return {
+    prevId: idx > 0 ? ids[idx - 1] : null,
+    nextId: idx >= 0 && idx < ids.length - 1 ? ids[idx + 1] : null,
+    loaded: true,
+  };
+}
 
 export default function LeadDetail() {
   const { id } = useParams();
@@ -159,9 +161,10 @@ export default function LeadDetail() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
   const scoring = useLeadScore(id);
+  const { prevId, nextId, loaded: navLoaded } = usePrevNext(id);
 
   const load = () => api.getLead(id).then((l) => { setLead(l); setForm(l); });
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); setPageTab('overview'); }, [id]);
 
   if (!lead) return <div className="p-8 text-slate-400">Loading…</div>;
 
@@ -198,8 +201,6 @@ export default function LeadDetail() {
     navigate(`/records/contacts/${res.contact_id}`);
   };
 
-  // Quick Actions route to the same real tabs/modals that already exist —
-  // no new backend logic, just a faster way to reach them.
   const runQuickAction = (key) => {
     if (key === 'call') return setDisposing(true);
     if (key === 'email') return lead.email && window.open(`mailto:${lead.email}`, '_self');
@@ -217,20 +218,39 @@ export default function LeadDetail() {
 
   return (
     <div className="max-w-[1500px] mx-auto">
-      <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-3">
-        <button onClick={() => navigate('/leads')} className="flex items-center gap-1 hover:text-ink font-medium">
-          <ArrowLeft className="w-3.5 h-3.5" /> Leads
-        </button>
-        <ChevronRight className="w-3 h-3 text-slate-300" />
-        <span className="text-ink">{lead.student_name}</span>
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+          <button onClick={() => navigate('/leads')} className="flex items-center gap-1 hover:text-ink font-medium">
+            <ArrowLeft className="w-3.5 h-3.5" /> Leads
+          </button>
+          <ChevronRight className="w-3 h-3 text-slate-300" />
+          <span className="text-ink">{lead.student_name}</span>
+        </div>
+
+        {navLoaded && (prevId || nextId) && (
+          <div className="flex items-center gap-1 shrink-0">
+            <button disabled={!prevId} onClick={() => navigate(`/leads/${prevId}`)}
+              className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-line text-slate-500 hover:text-ink hover:bg-[var(--color-canvas)] disabled:opacity-40 disabled:pointer-events-none">
+              <ArrowLeft className="w-3.5 h-3.5" /> Previous
+            </button>
+            <button disabled={!nextId} onClick={() => navigate(`/leads/${nextId}`)}
+              className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-line text-slate-500 hover:text-ink hover:bg-[var(--color-canvas)] disabled:opacity-40 disabled:pointer-events-none">
+              Next <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* ===== Header card ===== */}
+      {/* ===== Header — white card, matching the full reference image
+          precisely (I had this backwards in the previous two rounds,
+          going by a cropped view that read as solid purple; the complete
+          image makes clear it's a white card with three distinctly
+          coloured buttons and dark text). ===== */}
       <div className="card p-5">
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div className="flex items-start gap-3.5 min-w-0">
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-white text-lg shrink-0"
-              style={{ background: avatarGradient(lead.student_name) }}>
+              style={{ background: accentGradient('leads') }}>
               {initialsOf(lead.student_name)}
             </div>
             <div className="min-w-0">
@@ -239,8 +259,19 @@ export default function LeadDetail() {
                 <StatusBadge status={lead.status} />
               </div>
               <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1.5 text-sm text-slate-500">
-                {lead.mobile && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {lead.mobile}</span>}
-                {lead.email && <span className="flex items-center gap-1 truncate"><Mail className="w-3.5 h-3.5" /> {lead.email}</span>}
+                {lead.mobile && (
+                  <span className="flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5" /> {lead.mobile}
+                    <a href={`tel:${lead.mobile}`} aria-label="Call" className="text-[var(--color-brand)] hover:opacity-70"><Phone className="w-3.5 h-3.5" /></a>
+                    <a href={`https://wa.me/${lead.mobile.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" aria-label="WhatsApp" className="text-[var(--color-success)] hover:opacity-70"><MessageCircle className="w-3.5 h-3.5" /></a>
+                  </span>
+                )}
+                {lead.email && (
+                  <span className="flex items-center gap-1.5 truncate">
+                    <Mail className="w-3.5 h-3.5" /> {lead.email}
+                    <a href={`mailto:${lead.email}`} aria-label="Email" className="text-[var(--color-brand)] hover:opacity-70 shrink-0"><Mail className="w-3.5 h-3.5" /></a>
+                  </span>
+                )}
                 {lead.city && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {lead.city}</span>}
               </div>
               {tags.length > 0 && (
@@ -258,42 +289,54 @@ export default function LeadDetail() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
-            <div className="rounded-xl px-3.5 py-2 text-center" style={{ background: 'var(--color-canvas)' }}>
-              <div className="t-meta mb-0.5">Lead Score</div>
-              <div className="flex items-baseline justify-center gap-0.5">
-                <span className="text-lg font-bold text-ink">{lead.lead_score}</span>
-                <span className="text-[10px] text-slate-400">/100</span>
+          <div className="flex items-start gap-4 shrink-0 flex-wrap justify-end">
+            <div className="flex items-center gap-2.5">
+              <div className="rounded-xl px-3.5 py-2 text-center" style={{ background: 'var(--color-canvas)' }}>
+                <div className="t-meta mb-0.5">Lead Score</div>
+                {scoring ? (
+                  <>
+                    <div className="flex items-baseline justify-center gap-0.5">
+                      <span className="text-lg font-bold text-ink">{scoring.score}</span>
+                      <span className="text-[10px] text-slate-400">/100</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-1 text-[11px] font-semibold" style={{ color: bandColor(scoring.band) }}>
+                      {scoring.band === 'Cold' ? <Snowflake className="w-3 h-3" /> : <Flame className="w-3 h-3" />} {scoring.band}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-sm text-slate-300 py-1.5">···</div>
+                )}
               </div>
-              <div className="flex items-center justify-center gap-1 text-[11px] font-semibold"
-                style={{ color: SCORE_COLOR[lead.lead_score_label] || 'var(--color-brand)' }}>
-                {lead.lead_score_label === 'Cold' ? <Snowflake className="w-3 h-3" /> : <Flame className="w-3 h-3" />}
-                {lead.lead_score_label}
-              </div>
+
+              {can('leads', 'edit') && !lead.converted_contact_id && (
+                <button onClick={convert} className="flex items-center gap-1.5 text-white text-sm font-semibold px-4 py-2.5 rounded-xl h-fit" style={{ background: 'var(--color-brand)' }}>
+                  <UserCheck className="w-4 h-4" /> Convert Lead
+                </button>
+              )}
+              {can('leads', 'edit') && (
+                <button onClick={() => setScheduling((s) => !s)} className="flex items-center gap-1.5 text-white text-sm font-semibold px-4 py-2.5 rounded-xl h-fit" style={{ background: '#059669' }}>
+                  <CalendarClock className="w-4 h-4" /> Schedule Call
+                </button>
+              )}
+              {can('calls', 'create') && !lead.converted_contact_id && (
+                <button onClick={() => setDisposing(true)} className="flex items-center gap-1.5 text-white text-sm font-semibold px-4 py-2.5 rounded-xl h-fit" style={{ background: '#DC2626' }}>
+                  <PhoneCall className="w-4 h-4" /> Dispose
+                </button>
+              )}
             </div>
 
-            {can('leads', 'edit') && !lead.converted_contact_id && (
-              <button onClick={convert} className="flex items-center gap-1.5 text-white text-sm font-semibold px-4 py-2.5 rounded-xl h-fit"
-                style={{ background: 'linear-gradient(135deg, var(--color-brand), var(--color-special))' }}>
-                <UserCheck className="w-4 h-4" /> Convert Lead
-              </button>
-            )}
-            {can('leads', 'edit') && (
-              <button onClick={() => setScheduling((s) => !s)} className="flex items-center gap-1.5 text-white text-sm font-semibold px-4 py-2.5 rounded-xl h-fit"
-                style={{ background: '#059669' }}>
-                <CalendarClock className="w-4 h-4" /> Schedule Call
-              </button>
-            )}
-            {can('calls', 'create') && !lead.converted_contact_id && (
-              <button onClick={() => setDisposing(true)} className="flex items-center gap-1.5 text-white text-sm font-semibold px-4 py-2.5 rounded-xl h-fit"
-                style={{ background: '#DC2626' }}>
-                <PhoneCall className="w-4 h-4" /> Dispose
-              </button>
-            )}
-            <button onClick={() => setEditing((s) => !s)} aria-label="More actions"
-              className="p-2.5 rounded-xl border border-line text-slate-500 hover:text-ink hover:bg-[var(--color-canvas)] h-fit">
-              <MoreVertical className="w-4 h-4" />
-            </button>
+            {/* Owner + Created — shown once, here, not repeated in the
+                Assignment card below (that card keeps Source, which
+                isn't shown anywhere else). */}
+            <div className="text-xs text-slate-500 text-right">
+              <div className="flex items-center justify-end gap-1.5">
+                <CalendarClock className="w-3.5 h-3.5 text-slate-400" />
+                Created on <span className="text-ink font-medium">{lead.created_at?.slice(0, 10)}</span>
+              </div>
+              <div className="flex items-center justify-end gap-1.5 mt-1">
+                Owner <span className="text-ink font-medium">{lead.assigned_counselor || 'Unassigned'}</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -305,40 +348,26 @@ export default function LeadDetail() {
           </div>
         )}
 
-        {/* Meta row: created date + owner — plain text, no fake "change" affordance
-            since ownership reassignment isn't wired up on this page. */}
-        <div className="flex items-center gap-5 mt-4 pt-4 border-t border-line text-sm flex-wrap">
-          <span className="flex items-center gap-1.5 text-slate-500">
-            <CalendarClock className="w-4 h-4 text-slate-400" />
-            Created <span className="text-ink font-medium">{lead.created_at?.slice(0, 10)}</span>
-          </span>
-          <span className="flex items-center gap-1.5 text-slate-500">
-            Owner <span className="text-ink font-medium">{lead.assigned_counselor || 'Unassigned'}</span>
-          </span>
-          {lead.mobile && (
-            <a href={`https://wa.me/${lead.mobile.replace(/\D/g, '')}`} target="_blank" rel="noreferrer"
-              className="flex items-center gap-1.5 text-slate-500 hover:text-ink ml-auto">
-              <MessageCircle className="w-4 h-4" /> WhatsApp
-            </a>
-          )}
-        </div>
-
-        {/* Stage tracker */}
+        {/* Stage tracker — brand colour on a white page, matching the
+            reference: filled circles for completed/current, grey outline
+            for upcoming, a solid brand-colour line marking progress. */}
         {!isTerminalOther ? (
-          <div className="relative flex items-center mt-5">
+          <div className="flex items-center mt-5">
             {FUNNEL_STAGES.map((stage, i) => (
               <div key={stage} className="flex items-center flex-1 last:flex-none">
                 <button disabled={!can('leads', 'edit') || lead.converted_contact_id} onClick={() => changeStatus(stage)}
                   className="flex flex-col items-center gap-1.5 shrink-0 disabled:cursor-default">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
-                    i < stageIndex ? 'text-white' : i === stageIndex ? 'text-white' : 'bg-white text-slate-300 border-line'
-                  }`} style={i <= stageIndex ? { background: 'var(--color-brand)', borderColor: 'var(--color-brand)' } : undefined}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                    i <= stageIndex ? 'text-white' : 'bg-white text-slate-300 border-2 border-line'}`}
+                    style={i <= stageIndex ? { background: 'var(--color-brand)' } : undefined}>
                     {i < stageIndex ? <Check className="w-4 h-4" /> : i + 1}
                   </div>
                   <span className={`text-[11px] whitespace-nowrap ${i === stageIndex ? 'text-ink font-semibold' : 'text-slate-400'}`}>{stage}</span>
                 </button>
-                {i < FUNNEL_STAGES.length - 1 && <div className={`flex-1 h-[3px] mx-1 rounded-full ${i < stageIndex ? '' : 'bg-[var(--color-line)]'}`}
-                  style={i < stageIndex ? { background: 'var(--color-brand)' } : undefined} />}
+                {i < FUNNEL_STAGES.length - 1 && (
+                  <div className={`flex-1 h-[3px] mx-1 rounded-full ${i < stageIndex ? '' : 'bg-[var(--color-line)]'}`}
+                    style={i < stageIndex ? { background: 'var(--color-brand)' } : undefined} />
+                )}
               </div>
             ))}
           </div>
@@ -363,7 +392,7 @@ export default function LeadDetail() {
         </div>
       )}
 
-      {/* Edit form (opened from the header's "more" button) */}
+      {/* Edit form */}
       {editing && (
         <form onSubmit={saveEdit} className="card p-5 mt-4 grid grid-cols-2 gap-3">
           <input placeholder="Name" className="border border-line rounded-lg px-3 py-2 text-sm col-span-2" value={form.student_name || ''} onChange={(e) => setForm({ ...form, student_name: e.target.value })} />
@@ -378,7 +407,7 @@ export default function LeadDetail() {
         </form>
       )}
 
-      {/* Page-level tabs — underlined strip, same 8 tabs as before */}
+      {/* Page-level tabs */}
       <div className="flex gap-5 mt-6 mb-5 border-b border-line overflow-x-auto thin-scroll">
         {PAGE_TABS.map((t) => (
           <button key={t.key} onClick={() => setPageTab(t.key)}
@@ -390,151 +419,148 @@ export default function LeadDetail() {
       </div>
 
       {pageTab === 'overview' && (
-        <>
-          <div className="grid lg:grid-cols-3 gap-5">
-            {/* LEFT: Basic + Personal information */}
-            <div className="space-y-4">
-              <div className="card p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase">Basic Information</h3>
-                  {can('leads', 'edit') && (
-                    <button onClick={() => setEditing(true)} className="text-xs font-medium flex items-center gap-1" style={{ color: 'var(--color-brand)' }}>
-                      <Pencil className="w-3 h-3" /> Edit
-                    </button>
-                  )}
+        <div className="grid lg:grid-cols-3 gap-5">
+          {/* LEFT: ONE consolidated "Basic Information" card, matching the
+              clearer reference exactly — it's a single larger card here,
+              not split across two. It also repeats Owner and Created On
+              (already in the header) the same way it repeats City — the
+              reference treats a quick-glance header value and the full
+              structured record as two legitimate, separate things, and
+              I'd wrongly tried to deduplicate that in an earlier round. */}
+          <div className="space-y-4">
+            <div className="card p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase">Basic Information</h3>
+                {can('leads', 'edit') && (
+                  <button onClick={() => setEditing(true)} className="text-xs font-medium flex items-center gap-1" style={{ color: 'var(--color-brand)' }}>
+                    <Pencil className="w-3 h-3" /> Edit
+                  </button>
+                )}
+              </div>
+              <dl className="text-sm space-y-2">
+                <div className="flex justify-between"><dt className="text-slate-400">Full Name</dt><dd className="text-ink font-medium">{lead.student_name}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-400">Mobile</dt><dd className="text-ink">{lead.mobile || '—'}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-400">Alternate Mobile</dt><dd className="text-ink">{lead.alternate_mobile || '—'}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-400">Email</dt><dd className="text-ink truncate ml-2">{lead.email || '—'}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-400">City</dt><dd className="text-ink">{lead.city || '—'}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-400">Source</dt><dd className="text-ink">{lead.source || '—'}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-400">Created On</dt><dd className="text-ink">{lead.created_at?.slice(0, 10)}</dd></div>
+                <div className="flex justify-between">
+                  <dt className="text-slate-400">Last Activity</dt>
+                  <dd className="text-ink text-right">
+                    {lead.activities?.[0] ? `${lead.activities[0].type} on ${String(lead.activities[0].created_at).slice(0, 10)}` : '—'}
+                  </dd>
                 </div>
-                <dl className="text-sm space-y-2">
-                  <div className="flex justify-between"><dt className="text-slate-400">Full Name</dt><dd className="text-ink font-medium">{lead.student_name}</dd></div>
-                  <div className="flex justify-between"><dt className="text-slate-400">Mobile</dt><dd className="text-ink">{lead.mobile || '—'}</dd></div>
-                  <div className="flex justify-between"><dt className="text-slate-400">Alt Mobile</dt><dd className="text-ink">{lead.alternate_mobile || '—'}</dd></div>
-                  <div className="flex justify-between"><dt className="text-slate-400">Email</dt><dd className="text-ink truncate ml-2">{lead.email || '—'}</dd></div>
-                  <div className="flex justify-between"><dt className="text-slate-400">Lead ID</dt><dd className="text-ink">L-{String(lead.id).padStart(4, '0')}</dd></div>
-                </dl>
-              </div>
-
-              <div className="card p-4">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Personal Information</h3>
-                <dl className="text-sm space-y-2">
-                  <div className="flex justify-between"><dt className="text-slate-400">Gender</dt><dd className="text-ink">{lead.gender || '—'}</dd></div>
-                  <div className="flex justify-between"><dt className="text-slate-400">Date of Birth</dt><dd className="text-ink">{lead.date_of_birth || '—'}</dd></div>
-                  <div className="flex justify-between"><dt className="text-slate-400">City</dt><dd className="text-ink">{lead.city || '—'}</dd></div>
-                </dl>
-              </div>
+                <div className="flex justify-between">
+                  <dt className="text-slate-400">Owner</dt>
+                  <dd className="text-ink">{lead.assigned_counselor || '—'}
+                    {can('leads', 'edit') && <button className="ml-1.5 text-xs" style={{ color: 'var(--color-brand)' }}>Change</button>}
+                  </dd>
+                </div>
+                <div className="flex justify-between"><dt className="text-slate-400">Lead ID</dt><dd className="text-ink">L-{String(lead.id).padStart(4, '0')}</dd></div>
+              </dl>
             </div>
 
-            {/* CENTER: Additional details + Assignment + status change */}
-            <div className="space-y-4">
+            {can('leads', 'edit') && !lead.converted_contact_id && (
               <div className="card p-4">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Additional Details</h3>
-                <dl className="text-sm space-y-2">
-                  <div className="flex justify-between"><dt className="text-slate-400">Product Interest</dt><dd className="text-ink">{lead.product_interest || '—'}</dd></div>
-                  <div className="flex justify-between"><dt className="text-slate-400">Service Interest</dt><dd className="text-ink">{lead.service_interest || '—'}</dd></div>
-                  <div className="flex justify-between"><dt className="text-slate-400">Campaign</dt><dd className="text-ink">{lead.campaign || '—'}</dd></div>
-                </dl>
-              </div>
-
-              <div className="card p-4">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Assignment</h3>
-                <dl className="text-sm space-y-2">
-                  <div className="flex justify-between"><dt className="text-slate-400">Owner</dt><dd className="text-ink">{lead.assigned_counselor || '—'}</dd></div>
-                  <div className="flex justify-between"><dt className="text-slate-400">Source</dt><dd className="text-ink">{lead.source || '—'}</dd></div>
-                  <div className="flex justify-between"><dt className="text-slate-400">Created On</dt><dd className="text-ink">{lead.created_at?.slice(0, 10)}</dd></div>
-                </dl>
-              </div>
-
-              {can('leads', 'edit') && !lead.converted_contact_id && (
-                <div className="card p-4">
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Change Status</h3>
-                  <div className="flex flex-wrap gap-1.5">
-                    {ALL_STATUSES.map((s) => (
-                      <button key={s} onClick={() => changeStatus(s)}
-                        className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
-                          lead.status === s ? 'bg-emerald-50 border-good text-good' : 'border-line text-slate-500 hover:border-ink/40'
-                        }`}>
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* RIGHT: Quick Actions, Score & Insights, Suggested Next Steps, Related Deals */}
-            <div className="space-y-4">
-              <div className="card p-4">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase mb-3">Quick Actions</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {QUICK_ACTIONS_BASE.map((a) => (
-                    <button key={a.key} onClick={() => runQuickAction(a.key)}
-                      className="flex flex-col items-start gap-2 p-3 rounded-xl border border-line hover:shadow-sm transition-shadow text-left">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${a.color}18`, color: a.color }}>
-                        <a.icon className="w-4 h-4" />
-                      </div>
-                      <span className="text-xs font-medium text-ink leading-tight">{a.label}</span>
+                <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Change Status</h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {ALL_STATUSES.map((s) => (
+                    <button key={s} onClick={() => changeStatus(s)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
+                        lead.status === s ? 'bg-emerald-50 border-good text-good' : 'border-line text-slate-500 hover:border-ink/40'
+                      }`}>
+                      {s}
                     </button>
                   ))}
                 </div>
               </div>
+            )}
+          </div>
 
-              <ScoreInsightsCard scoring={scoring} />
-              <SuggestedNextSteps scoring={scoring} />
+          {/* CENTER: Additional Details + Personal Information — matching
+              the reference's actual field set. The reference also shows
+              Budget, Expected Closure, Preferred Contact Time and Lead
+              Category on this card, and Occupation/Organization on
+              Personal Information — none of those exist as real columns
+              on this lead record, and section 10 of the brief is explicit
+              about not inventing business data, so they're left out rather
+              than shown as fake empty fields. Lead Rating IS a real column
+              and is now shown, as plain text rather than a 1–5 star
+              widget — the underlying value is a category (Hot/Warm/Cold),
+              not a numeric rating, and a star widget would imply a
+              precision the data doesn't have. */}
+          <div className="space-y-4">
+            <div className="card p-4">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Additional Details</h3>
+              <dl className="text-sm space-y-2">
+                <div className="flex justify-between"><dt className="text-slate-400">Product Interest</dt><dd className="text-ink">{lead.product_interest || '—'}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-400">Service Interest</dt><dd className="text-ink">{lead.service_interest || '—'}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-400">Campaign</dt><dd className="text-ink">{lead.campaign || '—'}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-400">Lead Rating</dt><dd className="text-ink">{lead.lead_rating || '—'}</dd></div>
+              </dl>
+            </div>
 
-              <div className="card p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase">Related Deals</h3>
-                  {!lead.converted_contact_id && can('leads', 'edit') && (
-                    <button onClick={convert} className="text-xs font-medium" style={{ color: 'var(--color-brand)' }}>Convert to create →</button>
-                  )}
-                </div>
-                <DealsTab lead={lead} />
-              </div>
+            <div className="card p-4">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Personal Information</h3>
+              <dl className="text-sm space-y-2">
+                <div className="flex justify-between"><dt className="text-slate-400">Gender</dt><dd className="text-ink">{lead.gender || '—'}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-400">Date of Birth</dt><dd className="text-ink">{lead.date_of_birth || '—'}</dd></div>
+              </dl>
             </div>
           </div>
 
-          {/* Recent Activity + Tasks/Meetings previews, using the exact same
-              components/data as their full tabs — just placed here too. */}
-          <div className="grid lg:grid-cols-3 gap-5 mt-5">
-            <div className="card p-4 lg:col-span-1">
+                    {/* RIGHT: Lead Score & Insights, Recent Activity — matching the
+              reference's confirmed order — then Quick Actions, Suggested
+              Next Steps and Related Deals, which section 11/12/15 of the
+              brief call for beyond what the reference crop captured. */}
+          <div className="space-y-4">
+            <ScoreInsightsCard scoring={scoring} />
+
+            <div className="card p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-semibold text-slate-500 uppercase">Recent Activity</h3>
                 <button onClick={() => setPageTab('activity')} className="text-xs font-medium" style={{ color: 'var(--color-brand)' }}>View all →</button>
               </div>
-              <div className="relative space-y-4">
-                {lead.activities.slice(0, 4).map((a, i) => (
-                  <div key={a.id} className="flex gap-3">
-                    <div className="flex flex-col items-center shrink-0">
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: 'var(--color-brand-soft)' }}>
-                        <Send className="w-3 h-3" style={{ color: 'var(--color-brand)' }} />
-                      </div>
-                      {i < Math.min(lead.activities.length, 4) - 1 && <div className="w-px flex-1 bg-line mt-1" />}
-                    </div>
-                    <div className="min-w-0 pb-1">
-                      <div className="text-sm text-ink truncate">{a.note}</div>
-                      <div className="text-xs text-slate-400 mt-0.5">{a.type} · {a.created_at}</div>
-                    </div>
+              <div className="space-y-2">
+                {lead.activities.slice(0, 4).map((a) => (
+                  <div key={a.id} className="text-sm border-l-2 border-line pl-3">
+                    <div className="text-ink truncate">{a.note}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">{a.type} · {a.created_at}</div>
                   </div>
                 ))}
                 {lead.activities.length === 0 && <p className="text-sm text-slate-400">Nothing here yet.</p>}
               </div>
             </div>
 
-            <div className="card p-4 lg:col-span-1">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase">Tasks</h3>
-                <button onClick={() => setPageTab('tasks')} className="text-xs font-medium" style={{ color: 'var(--color-brand)' }}>View all →</button>
+            <div className="card p-4">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase mb-3">Quick Actions</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {QUICK_ACTIONS.map((a) => (
+                  <button key={a.key} onClick={() => runQuickAction(a.key)}
+                    className="flex flex-col items-start gap-2 p-3 rounded-xl border border-line hover:shadow-sm transition-shadow text-left">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${a.color}18`, color: a.color }}>
+                      <a.icon className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-medium text-ink leading-tight">{a.label}</span>
+                  </button>
+                ))}
               </div>
-              <TasksTab leadId={id} />
             </div>
 
-            <div className="card p-4 lg:col-span-1">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase">Meetings</h3>
-                <button onClick={() => setPageTab('meetings')} className="text-xs font-medium" style={{ color: 'var(--color-brand)' }}>View all →</button>
+            <SuggestedNextSteps scoring={scoring} />
+
+            <div className="card p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase">Related Deals</h3>
+                {!lead.converted_contact_id && can('leads', 'edit') && (
+                  <button onClick={convert} className="text-xs font-medium" style={{ color: 'var(--color-brand)' }}>Convert to create →</button>
+                )}
               </div>
-              <MeetingsTab leadId={id} />
+              <DealsTab lead={lead} />
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {pageTab === 'activity' && (
