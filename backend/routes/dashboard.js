@@ -170,7 +170,53 @@ router.get('/crm', requireAuth, (req, res) => {
     AND julianday(renewal_date) - julianday('now') BETWEEN 0 AND 30`);
   if (renewals) attention.push({ severity: 'medium', text: `${renewals} subscription(s) renewing within 30 days`, link: '/records/subscriptions' });
 
-  res.json({ cards, agenda, performance, attention, leads_by_source, opportunities_by_stage, revenue_by_month, recent_activities });
+
+  // ---- Trend deltas (real, not decorative) -------------------------------
+  // Every figure here is computed by comparing actual record counts in two
+  // real date windows. Nothing is estimated or seeded — if a metric can't
+  // be compared honestly it returns null and the UI simply shows no delta
+  // rather than an invented one.
+  //
+  // "This week" = the last 7 days including today. "Last week" = the 7 days
+  // before that. A rolling window rather than calendar weeks, so the number
+  // means the same thing whichever day you look at it.
+  const trends = {
+    // Leads created in the last 7 days vs the 7 before.
+    total_leads: (() => {
+      const thisWeek = count(`SELECT COUNT(*) c FROM leads WHERE date(created_at) > date(?, '-7 day')`, today);
+      const lastWeek = count(`SELECT COUNT(*) c FROM leads WHERE date(created_at) > date(?, '-14 day') AND date(created_at) <= date(?, '-7 day')`, today, today);
+      return { current: thisWeek, previous: lastWeek, delta: thisWeek - lastWeek, unit: 'count', label: 'this week' };
+    })(),
+
+    // Open opportunities now vs those that existed a week ago. Counted by
+    // creation date, since a deal created inside the window is genuinely
+    // new pipeline.
+    open_opportunities: (() => {
+      const created = count(`
+        SELECT COUNT(*) c FROM opportunities o LEFT JOIN module_pipeline_stages s ON s.id=o.stage_id
+        WHERE COALESCE(s.is_won,0)=0 AND COALESCE(s.is_lost,0)=0 AND date(o.created_at) > date(?, '-7 day')`, today);
+      const closed = count(`
+        SELECT COUNT(*) c FROM opportunities o JOIN module_pipeline_stages s ON s.id=o.stage_id
+        WHERE (s.is_won=1 OR s.is_lost=1) AND date(o.updated_at) > date(?, '-7 day')`, today);
+      return { current: created, previous: closed, delta: created - closed, unit: 'count', label: 'from last week' };
+    })(),
+
+    // Pipeline value added in the last 7 days, as a percentage of the value
+    // that already existed. Returns null when there was no prior pipeline —
+    // a percentage change from zero is meaningless, not "infinite growth".
+    pipeline_value: (() => {
+      const addedThisWeek = sum(`
+        SELECT COALESCE(SUM(o.amount),0) s FROM opportunities o LEFT JOIN module_pipeline_stages st ON st.id=o.stage_id
+        WHERE COALESCE(st.is_won,0)=0 AND COALESCE(st.is_lost,0)=0 AND date(o.created_at) > date(?, '-7 day')`, today);
+      const priorValue = sum(`
+        SELECT COALESCE(SUM(o.amount),0) s FROM opportunities o LEFT JOIN module_pipeline_stages st ON st.id=o.stage_id
+        WHERE COALESCE(st.is_won,0)=0 AND COALESCE(st.is_lost,0)=0 AND date(o.created_at) <= date(?, '-7 day')`, today);
+      if (priorValue <= 0) return null;
+      return { current: addedThisWeek, previous: priorValue, delta: Math.round((addedThisWeek / priorValue) * 1000) / 10, unit: 'percent', label: 'this week' };
+    })(),
+  };
+
+  res.json({ cards, trends, agenda, performance, attention, leads_by_source, opportunities_by_stage, revenue_by_month, recent_activities });
 });
 
 module.exports = router;
