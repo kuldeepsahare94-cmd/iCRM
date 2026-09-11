@@ -82,23 +82,45 @@ function scoreLead(leadId) {
   const activityCount = db.prepare('SELECT COUNT(*) c FROM lead_activities WHERE lead_id=?').get(leadId).c;
 
   // FIT — how complete and qualified the record is.
-  const fitFields = [lead.email, lead.mobile, lead.city, lead.product_interest || lead.service_interest, lead.source];
-  const filled = fitFields.filter((v) => v && String(v).trim()).length;
+  //
+  // The fields are NAMED, not counted. This previously reported
+  // "2 key field(s) missing", which tells a user there's a problem but not
+  // what to do about it — they'd have to guess which fields the score
+  // cares about. The code already knows exactly which ones are blank, so
+  // throwing that away and reporting a bare number was losing the only
+  // part that makes the suggestion actionable.
+  const fitFields = [
+    { label: 'Email', value: lead.email },
+    { label: 'Mobile', value: lead.mobile },
+    { label: 'City', value: lead.city },
+    { label: 'Product or service interest', value: lead.product_interest || lead.service_interest },
+    { label: 'Source', value: lead.source },
+  ];
+  const missingFit = fitFields.filter((f) => !f.value || !String(f.value).trim()).map((f) => f.label);
+  const filled = fitFields.length - missingFit.length;
   const fit = (filled / fitFields.length) * 100;
   const fitPos = [], fitNeg = [];
-  filled === fitFields.length ? fitPos.push('Complete contact and interest details')
-    : fitNeg.push(`${fitFields.length - filled} key field(s) missing`);
+  if (missingFit.length === 0) {
+    fitPos.push('Complete contact and interest details');
+  } else {
+    // Listed explicitly so the user can act without guessing. Capped at
+    // three names so a brand-new empty lead doesn't produce an unreadable
+    // wall of text.
+    const shown = missingFit.slice(0, 3).join(', ');
+    const extra = missingFit.length > 3 ? ` +${missingFit.length - 3} more` : '';
+    fitNeg.push(`Add ${shown}${extra}`);
+  }
   if (lead.product_interest || lead.service_interest) fitPos.push('Stated product/service interest');
 
   // ENGAGEMENT — have they actually talked to us?
   let engagement = 0;
   const engPos = [], engNeg = [];
   if (calls.connected > 0) { engagement += Math.min(60, calls.connected * 20); engPos.push(`${calls.connected} connected call(s)`); }
-  else engNeg.push('No connected calls yet');
+  else engNeg.push('Call this lead and log a connected call');
   if (calls.seconds >= 120) { engagement += 20; engPos.push(`${Math.round(calls.seconds / 60)} min total talk time`); }
-  else if (calls.seconds > 0) engNeg.push('Very short talk time so far');
+  else if (calls.seconds > 0) engNeg.push('Have a longer conversation — talk time so far is very short');
   if (activityCount >= 3) { engagement += 20; engPos.push(`${activityCount} logged activities`); }
-  else if (activityCount === 0) engNeg.push('No activity logged');
+  else if (activityCount === 0) engNeg.push('Log a note or call so there is a record of contact');
 
   // INTENT — what the status and rating say about buying signal.
   const statusIntent = { Converted: 100, 'Follow-up': 75, Interested: 80, Contacted: 45, New: 20, Dropped: 5, 'Not Interested': 0 };
@@ -108,9 +130,10 @@ function scoreLead(leadId) {
   intPos.push(`Status: ${lead.status || 'New'}`);
   if (lead.lead_rating) {
     intent += ratingBoost[lead.lead_rating] || 0;
-    (ratingBoost[lead.lead_rating] || 0) >= 0 ? intPos.push(`Rated ${lead.lead_rating}`) : intNeg.push(`Rated ${lead.lead_rating}`);
+    (ratingBoost[lead.lead_rating] || 0) >= 0 ? intPos.push(`Rated ${lead.lead_rating}`) : intNeg.push(`Re-qualify this lead — currently rated ${lead.lead_rating}`);
   }
   if (lead.follow_up_date) { intent += 10; intPos.push('Follow-up scheduled'); }
+  else intNeg.push('Schedule a follow-up date');
   if (['Dropped', 'Not Interested'].includes(lead.status)) intNeg.push('Lead has disengaged');
 
   // RECENCY — a hot lead goes cold if nobody touches it.
@@ -120,9 +143,9 @@ function scoreLead(leadId) {
   if (lastTouch === null) recNeg.push('No recorded activity');
   else if (lastTouch <= 2) { recency = 100; recPos.push('Contacted within 2 days'); }
   else if (lastTouch <= 7) { recency = 80; recPos.push(`Last touched ${lastTouch} days ago`); }
-  else if (lastTouch <= 14) { recency = 55; recNeg.push(`No contact for ${lastTouch} days`); }
-  else if (lastTouch <= 30) { recency = 30; recNeg.push(`Going cold — ${lastTouch} days since contact`); }
-  else { recency = 10; recNeg.push(`Stale — ${lastTouch} days since contact`); }
+  else if (lastTouch <= 14) { recency = 55; recNeg.push(`Follow up — ${lastTouch} days since last contact`); }
+  else if (lastTouch <= 30) { recency = 30; recNeg.push(`Reach out soon — going cold at ${lastTouch} days since contact`); }
+  else { recency = 10; recNeg.push(`Re-engage or close — stale for ${lastTouch} days`); }
 
   const result = compose([
     { name: 'Fit', score: fit, weight: 25, positives: fitPos, negatives: fitNeg },

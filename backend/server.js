@@ -21,6 +21,7 @@ require('./db-phase29-inbound-email');
 require('./db-phase30-email-campaigns');
 require('./db-phase31-email-diagnostics');
 require('./db-phase32-quotation-discount');
+require('./db-phase33-wa-quick-templates');
 
 const app = express();
 
@@ -104,6 +105,7 @@ app.use('/api/admin', requireAuth, require('./routes/admin'));
 app.use('/api/finance', requireAuth, require('./routes/finance'));
 app.use('/api/c360', requireAuth, require('./routes/customer360'));
 app.use('/api/email-settings', requireAuth, require('./routes/emailSettings'));
+app.use('/api/wa-quick-templates', requireAuth, require('./routes/waQuickTemplates'));
 app.use('/api/inbox', requireAuth, require('./routes/inbox'));
 // Public: hit by recipients' mail clients, which have no CRM session.
 app.use('/api/track', require('./routes/tracking'));
