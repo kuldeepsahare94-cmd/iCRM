@@ -60,6 +60,20 @@ function KpiCard({ label, value, sub, trend, icon: Icon, color, tone, to }) {
   return to ? <Link to={to} className="block h-full">{body}</Link> : body;
 }
 
+
+// Formats a backend trend object for display. Deliberately returns null
+// when the delta is zero or the backend couldn't compute an honest
+// comparison — an empty space says less-but-true, where "0%" implies a
+// measurement that didn't really happen.
+function formatTrend(trend) {
+  if (!trend || trend.delta === null || trend.delta === undefined) return null;
+  const d = trend.delta;
+  if (d === 0) return null;
+  const sign = d > 0 ? '+' : '';
+  const text = trend.unit === 'percent' ? `${sign}${d}% ${trend.label}` : `${sign}${d} ${trend.label}`;
+  return { dir: d > 0 ? 'up' : 'down', text };
+}
+
 function SectionLabel({ children, action }) {
   return (
     <div className="flex items-center justify-between mt-8 mb-3">
@@ -276,9 +290,9 @@ function CrmDashboardSection({ data }) {
 
       <SectionLabel>Pipeline at a glance</SectionLabel>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <KpiCard label="Total Leads" value={c.total_leads} icon={Users} color={COLORS.violet} to="/leads" />
-        <KpiCard label="Pipeline Value" value={inr(c.pipeline_value)} icon={Target} color={COLORS.teal} to="/records/opportunities" />
-        <KpiCard label="Open Opportunities" value={c.open_opportunities} icon={TrendingUp} color={COLORS.amber} to="/records/opportunities" />
+        <KpiCard label="Total Leads" value={c.total_leads} trend={formatTrend(data.trends?.total_leads)} icon={Users} color={COLORS.violet} to="/leads" />
+        <KpiCard label="Pipeline Value" value={inr(c.pipeline_value)} trend={formatTrend(data.trends?.pipeline_value)} icon={Target} color={COLORS.teal} to="/records/opportunities" />
+        <KpiCard label="Open Opportunities" value={c.open_opportunities} trend={formatTrend(data.trends?.open_opportunities)} icon={TrendingUp} color={COLORS.amber} to="/records/opportunities" />
         <KpiCard label="Won This Month" value={inr(c.won_revenue_month)} sub={`${c.lost_this_month} lost this month`} icon={Trophy} color={COLORS.emerald} to="/records/opportunities" />
         <KpiCard label="Follow-ups Due" value={c.followups_due_today} sub={`${c.followups_overdue} overdue`} icon={CalendarClock} color={COLORS.rose} to="/leads" />
       </div>
@@ -400,8 +414,43 @@ export default function Dashboard() {
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <div className="max-w-[1600px] mx-auto rounded-3xl -m-4 sm:-m-6 p-4 sm:p-6"
+    <div className="relative max-w-[1600px] mx-auto rounded-3xl -m-4 sm:-m-6 p-4 sm:p-6"
       style={{ background: 'radial-gradient(ellipse 1400px 500px at top, var(--color-brand-soft), transparent 60%)' }}>
+
+      {/* ===== Background treatment =====
+          Three layers, all decorative, all behind the content:
+
+          1. A fine dot grid — gives the canvas texture so white cards read
+             as sitting ON something rather than floating in a void. Kept
+             very low contrast; at normal viewing distance you register it
+             as "not flat" rather than consciously seeing dots.
+          2. Two soft colour blooms in the brand hues, top-right and
+             bottom-left, so the page has warmth and a sense of depth.
+          3. A large outline watermark of the brand mark, bottom-right.
+
+          Every layer is `pointer-events-none` and sits at a negative
+          z-index so it can never intercept a click or overlap text — a
+          watermark that interferes with the UI is worse than no watermark.
+          All of it is also `aria-hidden`, since none of it carries meaning
+          for a screen reader. */}
+      <div aria-hidden="true" className="absolute inset-0 -z-10 overflow-hidden rounded-3xl pointer-events-none">
+        <div className="absolute inset-0 opacity-[0.5]" style={{
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(79,70,229,0.07) 1px, transparent 0)',
+          backgroundSize: '26px 26px',
+        }} />
+        <div className="absolute -top-24 -right-24 w-[460px] h-[460px] rounded-full" style={{
+          background: 'radial-gradient(circle, rgba(124,58,237,0.10), transparent 68%)',
+        }} />
+        <div className="absolute -bottom-32 -left-20 w-[420px] h-[420px] rounded-full" style={{
+          background: 'radial-gradient(circle, rgba(37,99,235,0.09), transparent 68%)',
+        }} />
+        <svg viewBox="0 0 200 200" className="absolute bottom-6 right-8 w-[260px] h-[260px] opacity-[0.035]">
+          <path d="M100 18 L168 56 L168 132 L100 170 L32 132 L32 56 Z" fill="none" stroke="#4F46E5" strokeWidth="5" />
+          <path d="M100 54 L136 74 L136 114 L100 134 L64 114 L64 74 Z" fill="none" stroke="#4F46E5" strokeWidth="5" />
+          <circle cx="100" cy="94" r="13" fill="#4F46E5" />
+        </svg>
+      </div>
+
       <div className="rounded-2xl px-6 py-7 mb-2 relative overflow-hidden"
         style={{ background: 'linear-gradient(120deg, #EEF2FF 0%, #F5F3FF 45%, #FFFFFF 100%)' }}>
         {/* Soft depth wash behind the content — a flat pastel panel is what
