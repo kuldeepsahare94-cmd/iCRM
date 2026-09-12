@@ -9,6 +9,8 @@ import { getFieldValue, formatFieldValue, FieldInput, recordTitle } from './fiel
 import { computeFollowupStatus, findFollowupField } from './followupUtils';
 import AddRelatedModal, { canCreateRelation, relationTargetModule } from './AddRelatedModal';
 import WhatsAppTemplateModal from '../../components/WhatsAppTemplateModal';
+import { accentFor } from '../../theme/moduleAccents';
+import { avatarGradientFor, initialsOf } from '../../theme/avatarColors';
 import DisposeLeadModal from '../../components/DisposeLeadModal';
 import QuotationItemsPanel from './QuotationItemsPanel';
 
@@ -25,6 +27,31 @@ const NON_RELATION_ARRAY_KEYS = new Set(); // reserved, currently nothing to exc
 // matchEntity() cover) — everything else skips the WhatsApp tab entirely
 // rather than showing an always-empty one.
 const WHATSAPP_CAPABLE_MODULES = new Set(['accounts', 'contacts', 'opportunities', 'tickets']);
+
+
+// Subpanel columns were "the first six keys of the row object", which is
+// why panels showed raw foreign keys — Account Id, Contact Id,
+// Opportunity Id — as if they were business data. A user looking at an
+// account's quotations does not need to be told the account_id is 1; they
+// are already on that account.
+//
+// This skips plumbing (ids, timestamps, ownership, internal flags) and
+// prefers columns a human would actually scan.
+const SUBPANEL_SKIP = /^(id|.*_id|created_at|updated_at|created_by|owner_id|related_module|related_record_id|.*_json|.*_encrypted|uid|tracking_token|stored_name|thread_key|message_id|in_reply_to)$/i;
+
+function subpanelColumns(row) {
+  const keys = Object.keys(row).filter((k) => !SUBPANEL_SKIP.test(k));
+  // Fields most worth seeing first, when present.
+  const preferred = ['first_name', 'last_name', 'account_name', 'full_name', 'name', 'title',
+    'subject', 'quote_number', 'opportunity_name', 'meeting_title', 'task_title', 'call_subject',
+    'plan', 'status', 'stage_name', 'priority', 'amount', 'grand_total', 'recurring_amount',
+    'quote_date', 'due_date', 'start_datetime', 'job_title', 'email', 'mobile', 'phone', 'body'];
+  const ranked = [...keys].sort((a, b) => {
+    const ia = preferred.indexOf(a), ib = preferred.indexOf(b);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
+  return ranked.slice(0, 6);
+}
 
 function FollowUpPanel({ module, fields, record, showWhatsApp, onGoToWhatsApp, onUpdated }) {
   const followupField = useMemo(() => findFollowupField(fields), [fields]);
@@ -87,11 +114,6 @@ function FollowUpPanel({ module, fields, record, showWhatsApp, onGoToWhatsApp, o
           </div>
         )}
         <div className="flex flex-wrap gap-2">
-          {phone && <a href={`tel:${phone}`} className="text-xs border border-line rounded-lg px-3 py-1.5 hover:bg-canvas">Call</a>}
-          {showWhatsApp && <button onClick={onGoToWhatsApp} className="text-xs border border-line rounded-lg px-3 py-1.5 hover:bg-canvas">WhatsApp</button>}
-          {email && <a href={`mailto:${email}`} className="text-xs border border-line rounded-lg px-3 py-1.5 hover:bg-canvas">Email</a>}
-          <button onClick={() => { setShowQuickMeeting((s) => !s); setShowQuickTask(false); setShowSetDate(false); }} className="text-xs border border-line rounded-lg px-3 py-1.5 hover:bg-canvas">Schedule meeting</button>
-          <button onClick={() => { setShowQuickTask((s) => !s); setShowQuickMeeting(false); setShowSetDate(false); }} className="text-xs border border-line rounded-lg px-3 py-1.5 hover:bg-canvas">Create task</button>
           {followupField && (
             <button onClick={() => { setShowSetDate((s) => !s); setShowQuickTask(false); setShowQuickMeeting(false); }} className="text-xs bg-amber text-white rounded-lg px-3 py-1.5 hover:opacity-90">Set follow-up</button>
           )}
@@ -569,15 +591,46 @@ export default function UniversalDetail() {
   const tabs = ['overview', ...embeddedRelations.map(([k]) => k), ...(showWhatsApp ? ['whatsapp'] : []), 'related'];
 
   return (
-    <div className="max-w-[1400px] mx-auto">
+    <div className="relative max-w-[1400px] mx-auto rounded-3xl -m-4 sm:-m-6 p-4 sm:p-6">
+      {/* Same background treatment as the list pages, tinted by this
+          module's accent — so moving list -> detail feels like staying
+          inside the module rather than landing on a different product.
+          z-0 with content at z-10; a negative z-index would paint it
+          behind the body background and make it invisible. */}
+      <div aria-hidden="true" className="absolute inset-0 z-0 overflow-hidden rounded-3xl pointer-events-none">
+        <div className="absolute inset-0" style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, ${accentFor(module.api_name).solid}33 1px, transparent 0)`,
+          backgroundSize: '22px 22px',
+        }} />
+        <div className="absolute -top-32 -right-28 w-[520px] h-[520px] rounded-full" style={{
+          background: `radial-gradient(circle, ${accentFor(module.api_name).solid}38, transparent 70%)`,
+        }} />
+        <div className="absolute -bottom-36 -left-28 w-[460px] h-[460px] rounded-full" style={{
+          background: `radial-gradient(circle, ${accentFor(module.api_name).solid}2E, transparent 70%)`,
+        }} />
+      </div>
+
+      <div className="relative z-10">
       <button onClick={() => navigate(`/records/${module.api_name}`)} className="text-slate-500 hover:text-ink text-sm inline-flex items-center gap-1 mb-4">
         <ArrowLeft className="w-4 h-4" /> {module.plural_label}
       </button>
 
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="t-page-title">{title}</h1>
-          {statusField && <div className="mt-2"><StatusBadge status={getFieldValue(record, statusField)} /></div>}
+      {/* Record header as a card with an avatar, matching Lead detail —
+          it was a bare <h1> on the page background with nothing to anchor
+          it, which is why it read as unfinished next to Leads. */}
+      <div className="card p-5 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-[3px]"
+          style={{ background: `linear-gradient(90deg, ${accentFor(module.api_name).from}, ${accentFor(module.api_name).to})` }} />
+        <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-white text-lg shrink-0 shadow-md"
+            style={{ background: avatarGradientFor(title) }}>
+            {initialsOf(title)}
+          </div>
+          <div className="min-w-0">
+            <h1 className="t-page-title">{title}</h1>
+            {statusField && <div className="mt-1.5"><StatusBadge status={getFieldValue(record, statusField)} /></div>}
+          </div>
         </div>
         <div className="flex gap-2">
           {can(module.api_name, 'edit') && !editing && (
@@ -590,6 +643,7 @@ export default function UniversalDetail() {
               <Trash2 className="w-4 h-4" /> Delete
             </button>
           )}
+        </div>
         </div>
       </div>
 
@@ -618,9 +672,9 @@ export default function UniversalDetail() {
       {(() => {
         const phone = record.phone || record.mobile || null;
         const actions = [
-          phone && { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, from: '#4ADE80', to: '#15803D',
+          { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, from: '#4ADE80', to: '#15803D',
             run: () => setWaOpen(true) },
-          phone && can('calls', 'create') && { key: 'call', label: 'Log Call', icon: PhoneCall, from: '#818CF8', to: '#4338CA',
+          can('calls', 'create') && { key: 'call', label: 'Log Call', icon: PhoneCall, from: '#818CF8', to: '#4338CA',
             run: () => setDisposing(true) },
           canCreateRelation('meetings', module.api_name) && can('meetings', 'create')
             && { key: 'meeting', label: 'Meeting', icon: CalendarPlus, from: '#6EE7B7', to: '#047857',
@@ -733,17 +787,24 @@ export default function UniversalDetail() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left bg-[var(--color-canvas)] border-b border-line">
-                  {Object.keys(rows[0]).filter((k) => k !== 'id').slice(0, 6).map((k) => (
-                    <th key={k} className="py-3 px-4 font-medium capitalize">{k.replace(/_/g, ' ')}</th>
+                <tr className="text-left border-b-2"
+                  style={{ background: `${accentFor(module.api_name).solid}0D`, borderColor: `${accentFor(module.api_name).solid}33` }}>
+                  {subpanelColumns(rows[0]).map((k) => (
+                    <th key={k} className="py-2.5 px-4 text-[11px] font-bold text-slate-500 uppercase tracking-wide">
+                      {k.replace(/_/g, ' ')}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.id} className="border-b border-line/60">
-                    {Object.keys(rows[0]).filter((k) => k !== 'id').slice(0, 6).map((k) => (
-                      <td key={k} className="py-3 px-4 text-slate-600">{String(row[k] ?? '—')}</td>
+                  <tr key={row.id} className="border-b border-line/60 transition-colors"
+                    onMouseEnter={(e) => { e.currentTarget.style.background = `${accentFor(module.api_name).solid}0A`; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
+                    {subpanelColumns(rows[0]).map((k, ci) => (
+                      <td key={k} className={`py-3 px-4 ${ci === 0 ? 'text-ink font-medium' : 'text-slate-600'}`}>
+                        {row[k] === null || row[k] === undefined || row[k] === '' ? '—' : String(row[k])}
+                      </td>
                     ))}
                   </tr>
                 ))}
@@ -801,6 +862,7 @@ export default function UniversalDetail() {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }
