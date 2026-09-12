@@ -53,6 +53,52 @@ function subpanelColumns(row) {
   return ranked.slice(0, 6);
 }
 
+
+// One field row. Empty values render an em-dash instead of collapsing,
+// so rows stay aligned and a blank field is visibly blank rather than
+// looking like a layout bug.
+function DetailRow({ label, value }) {
+  const empty = value === null || value === undefined || value === '';
+  return (
+    <div className="flex items-start justify-between gap-3 py-2 border-b border-line/50 last:border-0">
+      <dt className="text-xs text-slate-500 font-medium shrink-0 pt-0.5">{label}</dt>
+      <dd className={`text-sm text-right break-words ${empty ? 'text-slate-300' : 'text-ink'}`}>
+        {empty ? '—' : value}
+      </dd>
+    </div>
+  );
+}
+
+// Splits an ungrouped field list into labelled cards. When a module has no
+// layout configured in Settings, the Overview previously dumped every
+// field into one undifferentiated block. Grouping by what the field IS
+// gives the page structure without requiring anyone to configure a layout
+// first — and a module that DOES have a layout still uses it, untouched.
+const FIELD_GROUPS = [
+  { title: 'Contact', match: /email|phone|mobile|website|fax/i },
+  { title: 'Address', match: /address|city|state|country|postal|zip|street/i },
+  { title: 'Commercial', match: /amount|value|revenue|price|total|currency|discount|tax|payment|billing/i },
+  { title: 'Ownership', match: /owner|assigned|team|created_by|source/i },
+  { title: 'Dates', match: /date|_at$|expiry|renewal|valid/i },
+];
+
+function groupFields(fieldList) {
+  const groups = new Map();
+  const primary = [];
+  fieldList.forEach((f) => {
+    const g = FIELD_GROUPS.find((x) => x.match.test(f.api_name));
+    if (!g) { primary.push(f); return; }
+    if (!groups.has(g.title)) groups.set(g.title, []);
+    groups.get(g.title).push(f);
+  });
+  const out = [];
+  if (primary.length) out.push({ title: 'Details', fields: primary });
+  FIELD_GROUPS.forEach((g) => {
+    if (groups.has(g.title)) out.push({ title: g.title, fields: groups.get(g.title) });
+  });
+  return out;
+}
+
 function FollowUpPanel({ module, fields, record, showWhatsApp, onGoToWhatsApp, onUpdated }) {
   const followupField = useMemo(() => findFollowupField(fields), [fields]);
   const phoneField = useMemo(() => fields.find((f) => f.field_type === 'phone'), [fields]);
@@ -716,7 +762,7 @@ export default function UniversalDetail() {
       </div>
 
       {tab === 'overview' && (
-        <div className="card p-5 mt-5">
+        <div className={editing ? 'card p-5 mt-5' : 'mt-5'}>
           {editing ? (
             <>
               <div className="grid grid-cols-2 gap-4">
@@ -735,38 +781,44 @@ export default function UniversalDetail() {
               </div>
             </>
           ) : layout?.sections?.length > 0 ? (
-            <div className="space-y-5">
+            <div className="grid md:grid-cols-2 gap-4">
               {layout.sections.map((section, si) => (
-                <div key={si}>
-                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{section.title}</div>
-                  <div className={`grid gap-4 ${section.columns === 1 ? 'grid-cols-1' : section.columns === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-                    {section.fields.map((column, ci) => (
-                      <div key={ci} className="space-y-3">
-                        {column.map((apiName) => {
-                          const f = fields.find((x) => x.api_name === apiName);
-                          if (!f) return null;
-                          return (
-                            <div key={apiName}>
-                              <div className="text-xs text-slate-500 font-medium mb-1">{f.label}</div>
-                              <div className="text-sm text-ink">{formatFieldValue(getFieldValue(record, f), f)}</div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ))}
+                <div key={si} className="border border-line rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-line">
+                    <span className="w-1.5 h-4 rounded-full shrink-0"
+                      style={{ background: accentFor(module.api_name).solid }} />
+                    <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{section.title}</h3>
                   </div>
+                  <dl>
+                    {section.fields.flat().map((apiName) => {
+                      const f = fields.find((x) => x.api_name === apiName);
+                      if (!f) return null;
+                      return <DetailRow key={apiName} label={f.label}
+                        value={formatFieldValue(getFieldValue(record, f), f)} />;
+                    })}
+                  </dl>
                 </div>
               ))}
             </div>
+          ) : detailFields.length === 0 ? (
+            <div className="text-sm text-slate-400">No fields configured for this module yet.</div>
           ) : (
-            <div className="grid grid-cols-2 gap-4">
-              {detailFields.map((f) => (
-                <div key={f.id}>
-                  <div className="text-xs text-slate-500 font-medium mb-1">{f.label}</div>
-                  <div className="text-sm text-ink">{formatFieldValue(getFieldValue(record, f), f)}</div>
+            <div className="grid md:grid-cols-2 gap-4">
+              {groupFields(detailFields).map((group) => (
+                <div key={group.title} className="border border-line rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-line">
+                    <span className="w-1.5 h-4 rounded-full shrink-0"
+                      style={{ background: accentFor(module.api_name).solid }} />
+                    <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{group.title}</h3>
+                  </div>
+                  <dl>
+                    {group.fields.map((f) => (
+                      <DetailRow key={f.id} label={f.label}
+                        value={formatFieldValue(getFieldValue(record, f), f)} />
+                    ))}
+                  </dl>
                 </div>
               ))}
-              {detailFields.length === 0 && <div className="text-sm text-slate-400 col-span-2">No fields configured for this module yet.</div>}
             </div>
           )}
         </div>
