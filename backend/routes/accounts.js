@@ -6,11 +6,34 @@ const { fireWorkflows } = require('../services/workflowAutomation');
 
 router.get('/', requirePermission('accounts', 'view'), (req, res) => {
   const { status, owner_id, q } = req.query;
+  // Commercial context is the difference between an account list and a
+  // company directory — without value, "Meridian Manufacturing, Customer,
+  // Manufacturing" tells a salesperson nothing about whether it matters.
+  // Added as correlated subqueries in the SAME query rather than a
+  // per-row fetch from the client, so the list stays one round-trip
+  // regardless of how many accounts there are.
   let sql = `SELECT a.*,
       (SELECT COUNT(*) FROM contacts c WHERE c.account_id = a.id) AS contact_count,
       (SELECT COUNT(*) FROM opportunities o WHERE o.account_id = a.id) AS opportunity_count,
-      (SELECT COUNT(*) FROM tickets t WHERE t.account_id = a.id AND t.status NOT IN ('Resolved','Closed')) AS open_ticket_count
-    FROM accounts a WHERE 1=1`;
+      (SELECT COUNT(*) FROM tickets t WHERE t.account_id = a.id AND t.status NOT IN ('Resolved','Closed')) AS open_ticket_count,
+      (SELECT COUNT(*) FROM opportunities o
+         LEFT JOIN module_pipeline_stages s ON s.id = o.stage_id
+        WHERE o.account_id = a.id AND COALESCE(s.is_won,0)=0 AND COALESCE(s.is_lost,0)=0) AS open_deal_count,
+      (SELECT COALESCE(SUM(o.amount),0) FROM opportunities o
+         LEFT JOIN module_pipeline_stages s ON s.id = o.stage_id
+        WHERE o.account_id = a.id AND COALESCE(s.is_won,0)=0 AND COALESCE(s.is_lost,0)=0) AS open_pipeline_value,
+      (SELECT COALESCE(SUM(o.amount),0) FROM opportunities o
+         JOIN module_pipeline_stages s ON s.id = o.stage_id
+        WHERE o.account_id = a.id AND s.is_won=1) AS won_value,
+      COALESCE(u.full_name, u.username) AS owner_name,
+      (SELECT MAX(d) FROM (
+         SELECT MAX(COALESCE(disposed_at, created_at)) d FROM calls WHERE related_module='accounts' AND related_record_id = a.id
+         UNION ALL SELECT MAX(created_at) FROM meetings WHERE related_module='accounts' AND related_record_id = a.id
+         UNION ALL SELECT MAX(created_at) FROM notes WHERE related_module='accounts' AND related_record_id = a.id
+       )) AS last_activity_at
+    FROM accounts a
+    LEFT JOIN users u ON u.id = a.owner_id
+    WHERE 1=1`;
   const params = [];
   if (status) { sql += ' AND a.status = ?'; params.push(status); }
   if (owner_id) { sql += ' AND a.owner_id = ?'; params.push(owner_id); }
@@ -33,7 +56,29 @@ router.get('/:id', requirePermission('accounts', 'view'), (req, res) => {
   const subscriptions = db.prepare('SELECT * FROM subscriptions WHERE account_id=? ORDER BY created_at DESC').all(req.params.id);
   const tickets = db.prepare('SELECT * FROM tickets WHERE account_id=? ORDER BY created_at DESC').all(req.params.id);
 
-  res.json({ ...account, contacts, opportunities, quotations, subscriptions, tickets });
+  // Activity records use the polymorphic related_module/related_record_id
+  // pair rather than an account_id column — the same mechanism the Dispose
+  // Call flow already writes to. The tables and the write path both existed;
+  // the account detail endpoint simply never read them back, so calls,
+  // meetings, tasks and notes logged against an account were invisible on
+  // the account. Returning them here makes the existing relation-tab
+  // machinery in UniversalDetail pick them up automatically.
+  const polymorphic = (table, order = 'created_at DESC') => db.prepare(
+    `SELECT * FROM ${table} WHERE related_module='accounts' AND related_record_id=? ORDER BY ${order}`
+  ).all(req.params.id);
+
+  const calls = polymorphic('calls', 'COALESCE(disposed_at, created_at) DESC');
+  const meetings = polymorphic('meetings', 'COALESCE(start_datetime, created_at) DESC');
+  const tasks = polymorphic('tasks');
+  const notes = polymorphic('notes');
+  const documents = db.prepare(
+    "SELECT * FROM documents WHERE related_module='accounts' AND related_record_id=? ORDER BY created_at DESC"
+  ).all(req.params.id);
+
+  res.json({
+    ...account, contacts, opportunities, quotations, subscriptions, tickets,
+    calls, meetings, tasks, notes, documents,
+  });
 });
 
 router.post('/', requirePermission('accounts', 'create'), (req, res) => {
