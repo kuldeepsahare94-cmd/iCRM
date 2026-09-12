@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Trash2, Pencil, Send, MessageCircle, Sparkles, CheckSquare, FileText, Download, Paperclip, Upload } from 'lucide-react';
+import { ArrowLeft, Trash2, Pencil, Send, MessageCircle, Sparkles, CheckSquare, FileText, Download, Paperclip, Upload, PhoneCall, CalendarPlus, StickyNote } from 'lucide-react';
 import { api } from '../../api';
 import { usePermissions } from '../../context/usePermissions';
 import StatusBadge from '../../components/StatusBadge';
@@ -8,6 +8,8 @@ import { friendlyError } from '../../components/ui';
 import { getFieldValue, formatFieldValue, FieldInput, recordTitle } from './fieldUtils';
 import { computeFollowupStatus, findFollowupField } from './followupUtils';
 import AddRelatedModal, { canCreateRelation, relationTargetModule } from './AddRelatedModal';
+import WhatsAppTemplateModal from '../../components/WhatsAppTemplateModal';
+import DisposeLeadModal from '../../components/DisposeLeadModal';
 import QuotationItemsPanel from './QuotationItemsPanel';
 
 // Any array-of-objects the dedicated module route embeds in its detail
@@ -471,6 +473,8 @@ export default function UniversalDetail() {
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState('overview');
   const [addingRelation, setAddingRelation] = useState(null);
+  const [waOpen, setWaOpen] = useState(false);
+  const [disposing, setDisposing] = useState(false);
   const [layout, setLayout] = useState(null); // null until loaded; { sections: [] } means "no custom layout saved"
 
   const load = () => {
@@ -605,6 +609,49 @@ export default function UniversalDetail() {
       <FollowUpPanel module={module} fields={fields} record={record} showWhatsApp={showWhatsApp}
         onGoToWhatsApp={() => setTab('whatsapp')} onUpdated={load} />
 
+      {/* Quick actions — the same bar the Lead detail page has, now on
+          every module. Which actions appear depends on what the record can
+          actually support: WhatsApp and Log Call only show when there's a
+          phone number to use, so the bar never offers a button that can't
+          do anything. Creating a meeting/task/note routes into the existing
+          relation-tab machinery rather than duplicating it. */}
+      {(() => {
+        const phone = record.phone || record.mobile || null;
+        const actions = [
+          phone && { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, from: '#4ADE80', to: '#15803D',
+            run: () => setWaOpen(true) },
+          phone && can('calls', 'create') && { key: 'call', label: 'Log Call', icon: PhoneCall, from: '#818CF8', to: '#4338CA',
+            run: () => setDisposing(true) },
+          canCreateRelation('meetings', module.api_name) && can('meetings', 'create')
+            && { key: 'meeting', label: 'Meeting', icon: CalendarPlus, from: '#6EE7B7', to: '#047857',
+              run: () => setAddingRelation('meetings') },
+          canCreateRelation('tasks', module.api_name) && can('tasks', 'create')
+            && { key: 'task', label: 'Task', icon: CheckSquare, from: '#FCD34D', to: '#B45309',
+              run: () => setAddingRelation('tasks') },
+          canCreateRelation('notes', module.api_name) && can('notes', 'create')
+            && { key: 'note', label: 'Note', icon: StickyNote, from: '#C4B5FD', to: '#6D28D9',
+              run: () => setAddingRelation('notes') },
+        ].filter(Boolean);
+        if (actions.length === 0) return null;
+        return (
+          <div className="card p-3 mt-5">
+            <div className="flex items-center gap-2 overflow-x-auto thin-scroll">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide shrink-0 pl-1 pr-2">Quick Actions</span>
+              {actions.map((a) => (
+                <button key={a.key} onClick={a.run}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl border border-line hover:shadow-md hover:-translate-y-0.5 transition-all shrink-0">
+                  <span className="w-7 h-7 rounded-lg flex items-center justify-center text-white shadow-sm"
+                    style={{ background: `linear-gradient(135deg, ${a.from}, ${a.to})` }}>
+                    <a.icon className="w-3.5 h-3.5" />
+                  </span>
+                  <span className="text-xs font-medium text-ink whitespace-nowrap">{a.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="flex gap-1 mt-6 border-b border-line">
         {tabs.map((t) => (
           <button key={t} onClick={() => setTab(t)}
@@ -706,6 +753,21 @@ export default function UniversalDetail() {
           </div>
         </div>
       ))}
+
+      {waOpen && (
+        <WhatsAppTemplateModal
+          subject={{ id: Number(id), module: module.api_name, name: title,
+            phone: record.phone || record.mobile, interest: record.industry || '', city: record.city || '' }}
+          senderName={record.owner_name || ''} onClose={() => setWaOpen(false)} />
+      )}
+
+      {disposing && (
+        <DisposeLeadModal
+          subject={{ id: Number(id), module: module.api_name, name: title,
+            phone: record.phone || record.mobile, status: record.status }}
+          onClose={() => setDisposing(false)}
+          onDisposed={() => { setDisposing(false); load(); }} />
+      )}
 
       {addingRelation && (
         <AddRelatedModal relationKey={addingRelation} parentModule={module.api_name}

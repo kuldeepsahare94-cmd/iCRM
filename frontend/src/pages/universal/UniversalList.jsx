@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { Kanban as KanbanIcon, Search, MoreHorizontal, Eye, Pencil, LayoutGrid } from 'lucide-react';
 import { ModuleIcon } from '../../components/moduleIcons';
-import { accentGradient } from '../../theme/moduleAccents';
+import { accentFor, accentGradient } from '../../theme/moduleAccents';
+import QuotationItemsEditor from './QuotationItemsEditor';
 import { api } from '../../api';
 import { usePermissions } from '../../context/usePermissions';
 import StatusBadge from '../../components/StatusBadge';
@@ -13,6 +14,49 @@ import { kpisFor } from './listKpis';
 import { KpiCard, SkeletonRows, ErrorState, EmptyState, friendlyError } from '../../components/ui';
 
 const STATUS_TYPES = new Set(['status', 'contact_status', 'priority']);
+
+
+// Shared KPI tile for every module list. The uniform part is the treatment
+// — gradient chip, accent bar, same proportions everywhere. The distinct
+// part is the hue, taken from that module's own accent. Semantic tones
+// (success/warning/danger) still win where a metric genuinely carries
+// meaning, e.g. "Overdue" should read as a warning regardless of module.
+const TONE_GRADIENTS = {
+  success: ['#6EE7B7', '#047857'],
+  warning: ['#FCD34D', '#B45309'],
+  danger: ['#FDA4AF', '#BE123C'],
+  info: ['#93C5FD', '#1D4ED8'],
+  special: ['#C4B5FD', '#6D28D9'],
+  neutral: ['#A7F3D0', '#0F766E'],
+};
+
+function ModuleKpi({ label, value, tone, accent, index, clickable, active, onClick }) {
+  // The first tile always carries the module's own identity colour; the
+  // rest use their semantic tone so status still reads correctly.
+  const [from, to] = index === 0
+    ? [accent.from, accent.to]
+    : (TONE_GRADIENTS[tone] || [accent.from, accent.to]);
+  // Only tiles that can genuinely narrow the list become buttons — a total
+  // or a money figure has nothing to filter to, and making it look
+  // clickable would be a promise the tile can't keep.
+  const Tag = clickable ? 'button' : 'div';
+  return (
+    <Tag onClick={onClick}
+      className={`relative bg-white border rounded-2xl p-4 pt-5 overflow-hidden transition-all w-full text-left ${
+        clickable ? 'hover:shadow-md hover:-translate-y-0.5 cursor-pointer' : ''} ${
+        active ? 'border-transparent' : 'border-line'}`}
+      style={active ? { boxShadow: `0 0 0 2px ${to}` } : undefined}>
+      <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${from}, ${to})` }} />
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl shrink-0" style={{ background: `linear-gradient(135deg, ${from}, ${to})` }} />
+        <div className="min-w-0">
+          <div className="text-xl font-bold text-ink leading-none">{value}</div>
+          <div className="text-xs text-slate-500 mt-1 truncate">{label}</div>
+        </div>
+      </div>
+    </Tag>
+  );
+}
 
 export default function UniversalList() {
   const { moduleApiName } = useParams();
@@ -26,11 +70,18 @@ export default function UniversalList() {
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
   const [showForm, setShowForm] = useState(false);
+  // Quotation line items live outside `form` because they're a child
+  // collection, not a column on the record.
+  const [quoteItems, setQuoteItems] = useState([]);
+  const [discountType, setDiscountType] = useState('percent');
+  const [discountValue, setDiscountValue] = useState(0);
+  const isQuotations = moduleApiName === 'quotations';
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [openMenu, setOpenMenu] = useState(null);
+  const [kpiFilter, setKpiFilter] = useState(null);
   const PAGE_SIZE = 25;
 
   useEffect(() => {
@@ -69,17 +120,23 @@ export default function UniversalList() {
     return [...new Set(records.map((r) => r[statusField.api_name]).filter(Boolean))];
   }, [statusField, records]);
 
-  const filtered = useMemo(() => (
-    statusField && statusFilter
-      ? records.filter((r) => r[statusField.api_name] === statusFilter)
-      : records
-  ), [records, statusField, statusFilter]);
-
   const kpis = useMemo(() => kpisFor(moduleApiName, records), [moduleApiName, records]);
+
+  const filtered = useMemo(() => {
+    let rows = statusField && statusFilter
+      ? records.filter((r) => r[statusField.api_name] === statusFilter)
+      : records;
+    // A KPI tile filter stacks on top of the dropdown filters rather than
+    // replacing them, so the two controls compose instead of fighting.
+    const active = kpis?.find((k) => k.label === kpiFilter);
+    if (active?.filter) rows = rows.filter(active.filter);
+    return rows;
+  }, [records, statusField, statusFilter, kpiFilter, kpis]);
+
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  useEffect(() => { setPage(1); }, [q, statusFilter, moduleApiName]);
+  useEffect(() => { setPage(1); }, [q, statusFilter, kpiFilter, moduleApiName]);
 
   // Guard order matters. `if (!module) return null` used to run BEFORE the
   // loading check, so while the module was being fetched the page rendered
@@ -113,6 +170,7 @@ export default function UniversalList() {
 
   // Labels are rendered in several places; missing metadata must degrade to
   // the module's api_name rather than throwing.
+  const accent = accentFor(module.api_name);
   const pluralLabel = (module.plural_label || module.api_name || 'records');
   const singularLabel = (module.singular_label || module.api_name || 'record');
 
@@ -120,8 +178,25 @@ export default function UniversalList() {
     e.preventDefault();
     setSaving(true);
     try {
-      await api.universalCreate(module, form);
+      const payload = isQuotations
+        ? {
+          ...form,
+          items: quoteItems.map((i) => ({
+            product_id: i.product_id || null,
+            description: i.description || null,
+            quantity: Number(i.quantity) || 0,
+            unit_price: Number(i.unit_price) || 0,
+            discount_percent: Number(i.discount_percent) || 0,
+            tax_percent: Number(i.tax_percent) || 0,
+          })),
+          overall_discount_type: discountType,
+          overall_discount_value: Number(discountValue) || 0,
+        }
+        : form;
+      await api.universalCreate(module, payload);
       setForm({});
+      setQuoteItems([]);
+      setDiscountValue(0);
       setShowForm(false);
       load();
     } catch (err) {
@@ -153,7 +228,7 @@ export default function UniversalList() {
           </div>
         </div>
         <div className="flex gap-2">
-          {module.has_pipeline && (
+          {!!module.has_pipeline && (
             <button onClick={() => navigate(`/records/${module.api_name}/kanban`)}
               className="border border-line text-sm font-medium px-4 py-2 rounded-lg hover:bg-white inline-flex items-center gap-2">
               <KanbanIcon className="w-4 h-4" /> Kanban
@@ -171,8 +246,12 @@ export default function UniversalList() {
       </div>
 
       {kpis && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
-          {kpis.map((k) => <KpiCard key={k.label} label={k.label} value={k.value} tone={k.tone} />)}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+          {kpis.map((k, i) => (
+            <ModuleKpi key={k.label} label={k.label} value={k.value} tone={k.tone} accent={accent} index={i}
+              clickable={!!k.filter} active={kpiFilter === k.label}
+              onClick={k.filter ? () => setKpiFilter(kpiFilter === k.label ? null : k.label) : undefined} />
+          ))}
         </div>
       )}
 
@@ -200,6 +279,13 @@ export default function UniversalList() {
               <FieldInput field={f} value={form[f.api_name]} onChange={(v) => setForm({ ...form, [f.api_name]: v })} />
             </div>
           ))}
+          {isQuotations && (
+            <QuotationItemsEditor
+              items={quoteItems} setItems={setQuoteItems}
+              discountType={discountType} setDiscountType={setDiscountType}
+              discountValue={discountValue} setDiscountValue={setDiscountValue}
+            />
+          )}
           <button type="submit" disabled={saving} className="col-span-2 bg-amber text-white text-sm font-medium py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
             {saving ? 'Saving…' : `Save ${singularLabel.toLowerCase()}`}
           </button>
@@ -213,7 +299,15 @@ export default function UniversalList() {
               {listFields.map((f) => <th key={f.id} className="py-3 px-4 font-medium">{f.label}</th>)}
               {listFields.length === 0 && <th className="py-3 px-4 font-medium">Record</th>}
               {followupField && <th className="py-3 px-4 font-medium">Follow-up</th>}
-              {module.api_name === 'accounts' && <th className="py-3 px-4 t-meta font-semibold text-right">360</th>}
+              {module.api_name === 'accounts' && (
+                <>
+                  <th className="py-3 px-4 t-meta font-semibold text-right">Contacts</th>
+                  <th className="py-3 px-4 t-meta font-semibold text-right">Open deals</th>
+                  <th className="py-3 px-4 t-meta font-semibold text-right">Pipeline</th>
+                  <th className="py-3 px-4 t-meta font-semibold">Owner</th>
+                  <th className="py-3 px-4 t-meta font-semibold text-right"></th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -236,12 +330,37 @@ export default function UniversalList() {
                   <td className="py-3 px-4"><Link to={`/records/${module.api_name}/${r.id}`} className="text-ink font-medium hover:text-amber">{recordTitle(r, fields)}</Link></td>
                 )}
                 {module.api_name === 'accounts' && (
-                  <td className="py-3 px-4 text-right">
-                    <Link to={`/customer-360/${r.id}`} onClick={(e) => e.stopPropagation()}
-                      className="text-xs font-medium text-[var(--color-brand)] hover:underline whitespace-nowrap">
-                      Customer 360 →
-                    </Link>
-                  </td>
+                  <>
+                    <td className="py-3 px-4 text-right">
+                      <span className="text-slate-500 tabular-nums">{r.contact_count ?? 0}</span>
+                      {r.open_ticket_count > 0 && (
+                        <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                          style={{ background: 'var(--color-danger-soft)', color: 'var(--color-danger)' }}
+                          title={`${r.open_ticket_count} open ticket(s)`}>
+                          {r.open_ticket_count}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right text-slate-500 tabular-nums">{r.open_deal_count ?? 0}</td>
+                    <td className="py-3 px-4 text-right tabular-nums">
+                      {r.open_pipeline_value > 0
+                        ? <span className="text-ink font-semibold">₹{Number(r.open_pipeline_value).toLocaleString('en-IN')}</span>
+                        : <span className="text-slate-300">—</span>}
+                      {r.won_value > 0 && (
+                        <div className="text-[11px]" style={{ color: 'var(--color-success)' }}>
+                          ₹{Number(r.won_value).toLocaleString('en-IN')} won
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-slate-500">{r.owner_name || '—'}</td>
+                    <td className="py-3 px-4 text-right">
+                      <Link to={`/customer-360/${r.id}`} onClick={(e) => e.stopPropagation()}
+                        className="text-xs font-semibold whitespace-nowrap px-2.5 py-1.5 rounded-lg"
+                        style={{ background: `${accent.solid}14`, color: accent.solid }}>
+                        Customer 360 →
+                      </Link>
+                    </td>
+                  </>
                 )}
                 {followupField && (
                   <td className="py-3 px-4">

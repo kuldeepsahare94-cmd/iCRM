@@ -15,28 +15,39 @@ const isOpenStage = (r) => !r.is_won && !r.is_lost && !['Won', 'Lost', 'Closed']
 const today = () => new Date().toISOString().slice(0, 10);
 
 export const LIST_KPIS = {
+  // "Active" was near-duplicate of "Total accounts" in practice — almost
+  // everything is Active — so it earned its slot poorly. Replaced with open
+  // pipeline value, which is the number a sales manager actually opens this
+  // page for. Computed from open_pipeline_value, which the accounts list
+  // endpoint now returns per row.
   accounts: (rows) => [
     { label: 'Total accounts', value: rows.length, tone: 'info' },
-    { label: 'Customers', value: count(rows, (r) => r.account_type === 'Customer'), tone: 'success' },
-    { label: 'Prospects', value: count(rows, (r) => r.account_type === 'Prospect'), tone: 'warning' },
-    { label: 'Active', value: count(rows, (r) => r.status === 'Active'), tone: 'success' },
+    { label: 'Customers', value: count(rows, (r) => r.account_type === 'Customer'), tone: 'success',
+      filter: (r) => r.account_type === 'Customer' },
+    { label: 'Prospects', value: count(rows, (r) => r.account_type === 'Prospect'), tone: 'warning',
+      filter: (r) => r.account_type === 'Prospect' },
+    { label: 'Open pipeline', value: inr(sum(rows, () => true, (r) => r.open_pipeline_value)), tone: 'special' },
   ],
   contacts: (rows) => [
     { label: 'Total contacts', value: rows.length, tone: 'info' },
-    { label: 'Active', value: count(rows, (r) => r.contact_status === 'Active'), tone: 'success' },
+    { label: 'Active', value: count(rows, (r) => r.contact_status === 'Active'), tone: 'success',
+      filter: (r) => r.contact_status === 'Active' },
     { label: 'With email', value: count(rows, (r) => r.email), tone: 'neutral' },
     { label: 'With phone', value: count(rows, (r) => r.mobile || r.phone), tone: 'neutral' },
   ],
   opportunities: (rows) => [
-    { label: 'Open deals', value: count(rows, isOpenStage), tone: 'info' },
+    { label: 'Open deals', value: count(rows, isOpenStage), tone: 'info', filter: isOpenStage },
     { label: 'Open value', value: inr(sum(rows, isOpenStage, (r) => r.amount)), tone: 'special' },
     { label: 'Weighted', value: inr(rows.filter(isOpenStage).reduce((s, r) => s + (Number(r.amount) || 0) * ((r.probability ?? 0) / 100), 0)), tone: 'warning' },
-    { label: 'Won', value: count(rows, (r) => r.is_won || r.stage === 'Won'), tone: 'success' },
+    { label: 'Won', value: count(rows, (r) => r.is_won || r.stage === 'Won'), tone: 'success',
+      filter: (r) => r.is_won || r.stage === 'Won' },
   ],
   quotations: (rows) => [
     { label: 'Total quotes', value: rows.length, tone: 'info' },
-    { label: 'Sent', value: count(rows, (r) => r.status === 'Sent'), tone: 'warning' },
-    { label: 'Accepted', value: count(rows, (r) => r.status === 'Accepted'), tone: 'success' },
+    { label: 'Sent', value: count(rows, (r) => r.status === 'Sent'), tone: 'warning',
+      filter: (r) => r.status === 'Sent' },
+    { label: 'Accepted', value: count(rows, (r) => r.status === 'Accepted'), tone: 'success',
+      filter: (r) => r.status === 'Accepted' },
     { label: 'Total value', value: inr(sum(rows, () => true, (r) => r.grand_total)), tone: 'special' },
   ],
   subscriptions: (rows) => [
@@ -52,15 +63,21 @@ export const LIST_KPIS = {
   ],
   tickets: (rows) => [
     { label: 'Total tickets', value: rows.length, tone: 'info' },
-    { label: 'Open', value: count(rows, (r) => !['Resolved', 'Closed'].includes(r.status)), tone: 'warning' },
-    { label: 'High / urgent', value: count(rows, (r) => ['High', 'Urgent'].includes(r.priority) && !['Resolved', 'Closed'].includes(r.status)), tone: 'danger' },
-    { label: 'Resolved', value: count(rows, (r) => ['Resolved', 'Closed'].includes(r.status)), tone: 'success' },
+    { label: 'Open', value: count(rows, (r) => !['Resolved', 'Closed'].includes(r.status)), tone: 'warning',
+      filter: (r) => !['Resolved', 'Closed'].includes(r.status) },
+    { label: 'High / urgent', value: count(rows, (r) => ['High', 'Urgent'].includes(r.priority) && !['Resolved', 'Closed'].includes(r.status)), tone: 'danger',
+      filter: (r) => ['High', 'Urgent'].includes(r.priority) && !['Resolved', 'Closed'].includes(r.status) },
+    { label: 'Resolved', value: count(rows, (r) => ['Resolved', 'Closed'].includes(r.status)), tone: 'success',
+      filter: (r) => ['Resolved', 'Closed'].includes(r.status) },
   ],
   tasks: (rows) => [
     { label: 'Total tasks', value: rows.length, tone: 'info' },
-    { label: 'Open', value: count(rows, (r) => r.status !== 'Completed'), tone: 'warning' },
-    { label: 'Overdue', value: count(rows, (r) => r.status !== 'Completed' && r.due_date && String(r.due_date).slice(0, 10) < today()), tone: 'danger' },
-    { label: 'Completed', value: count(rows, (r) => r.status === 'Completed'), tone: 'success' },
+    { label: 'Open', value: count(rows, (r) => r.status !== 'Completed'), tone: 'warning',
+      filter: (r) => r.status !== 'Completed' },
+    { label: 'Overdue', value: count(rows, (r) => r.status !== 'Completed' && r.due_date && String(r.due_date).slice(0, 10) < today()), tone: 'danger',
+      filter: (r) => r.status !== 'Completed' && r.due_date && String(r.due_date).slice(0, 10) < today() },
+    { label: 'Completed', value: count(rows, (r) => r.status === 'Completed'), tone: 'success',
+      filter: (r) => r.status === 'Completed' },
   ],
   products: (rows) => [
     { label: 'Products', value: rows.length, tone: 'info' },

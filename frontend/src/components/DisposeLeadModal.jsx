@@ -19,14 +19,20 @@ const STATUS_HINT = {
   'Invalid number': 'Dropped',
 };
 
-export default function DisposeLeadModal({ lead, onClose, onDisposed }) {
+export default function DisposeLeadModal({ lead, subject: subjectProp, onClose, onDisposed }) {
+  // Back-compat: existing callers pass `lead`. New callers pass a
+  // normalised `subject`, so this works on accounts too.
+  const subject = subjectProp || {
+    id: lead?.id, module: 'leads', name: lead?.student_name, phone: lead?.mobile, status: lead?.status,
+  };
+  const isLead = subject.module === 'leads';
   // Call timer starts the moment the modal opens — that is the "call".
   const [seconds, setSeconds] = useState(0);
   const [running, setRunning] = useState(true);
   const [connected, setConnected] = useState(null);
   const [disposition, setDisposition] = useState('');
   const [options, setOptions] = useState({ yes: [], no: [] });
-  const [leadStatus, setLeadStatus] = useState(lead.status || '');
+  const [leadStatus, setLeadStatus] = useState(subject.status || '');
   const [followUp, setFollowUp] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -66,9 +72,9 @@ export default function DisposeLeadModal({ lead, onClose, onDisposed }) {
     setSaving(true); setError('');
     try {
       await api.disposeCall({
-        related_module: 'leads',
-        related_record_id: lead.id,
-        phone_number: lead.mobile || null,
+        related_module: subject.module,
+        related_record_id: subject.id,
+        phone_number: subject.phone || null,
         connected,
         disposition,
         duration_seconds: seconds,
@@ -85,13 +91,13 @@ export default function DisposeLeadModal({ lead, onClose, onDisposed }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true"
-      aria-label={`Dispose call with ${lead.student_name}`}>
+      aria-label={`Dispose call with ${subject.name}`}>
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <form onSubmit={submit} className="card relative w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-line shrink-0">
           <div>
             <h2 className="t-section">Dispose call</h2>
-            <p className="t-meta">{lead.student_name}{lead.mobile ? ` · ${lead.mobile}` : ''}</p>
+            <p className="t-meta">{subject.name}{subject.phone ? ` · ${subject.phone}` : ''}</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close"
             className="text-[var(--color-faint)] hover:text-ink p-1 rounded-lg hover:bg-[var(--color-canvas)]">
@@ -153,13 +159,17 @@ export default function DisposeLeadModal({ lead, onClose, onDisposed }) {
               </div>
 
               <div className="grid sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="t-meta font-medium block mb-1">Update lead status</label>
-                  <select className="input" value={leadStatus} onChange={(e) => setLeadStatus(e.target.value)}>
-                    <option value="">Leave unchanged</option>
-                    {LEAD_STATUSES.map((s) => <option key={s}>{s}</option>)}
-                  </select>
-                </div>
+                {/* Only leads have a funnel status. Showing this on an
+                    account would offer a control that changes nothing. */}
+                {isLead && (
+                  <div>
+                    <label className="t-meta font-medium block mb-1">Update lead status</label>
+                    <select className="input" value={leadStatus} onChange={(e) => setLeadStatus(e.target.value)}>
+                      <option value="">Leave unchanged</option>
+                      {LEAD_STATUSES.map((s) => <option key={s}>{s}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="t-meta font-medium block mb-1">Next follow-up</label>
                   <input type="date" className="input" value={followUp} onChange={(e) => setFollowUp(e.target.value)} />

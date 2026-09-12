@@ -31,7 +31,20 @@ function renderTemplate(body, vars) {
   }).replace(/\s{2,}/g, ' ').trim();
 }
 
-export default function WhatsAppTemplateModal({ lead, senderName, onClose }) {
+// Works for any record type. The caller normalises the record into
+// { id, name, phone, interest } so this component never has to know
+// whether it's looking at a lead (student_name/mobile) or an account
+// (account_name/phone) — adding a third type later needs no change here.
+export function subjectFromLead(lead) {
+  return { id: lead.id, module: 'leads', name: lead.student_name, phone: lead.mobile,
+    interest: lead.product_interest || lead.service_interest || '', city: lead.city || '' };
+}
+export function subjectFromAccount(acc) {
+  return { id: acc.id, module: 'accounts', name: acc.account_name, phone: acc.phone || acc.mobile,
+    interest: acc.industry || '', city: acc.city || '' };
+}
+
+export default function WhatsAppTemplateModal({ subject, senderName, onClose }) {
   const [templates, setTemplates] = useState([]);
   const [docs, setDocs] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -39,26 +52,26 @@ export default function WhatsAppTemplateModal({ lead, senderName, onClose }) {
   const [includedDocs, setIncludedDocs] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const phone = (lead.mobile || '').replace(/\D/g, '');
+  const phone = (subject.phone || '').replace(/\D/g, '');
 
   const vars = useMemo(() => ({
-    first_name: (lead.student_name || '').split(' ')[0] || '',
-    full_name: lead.student_name || '',
-    company_name: lead.city || '',
-    product_interest: lead.product_interest || lead.service_interest || '',
+    first_name: (subject.name || '').split(' ')[0] || '',
+    full_name: subject.name || '',
+    company_name: subject.name || '',
+    product_interest: subject.interest || '',
     sender_name: senderName || '',
-    city: lead.city || '',
-  }), [lead, senderName]);
+    city: subject.city || '',
+  }), [subject, senderName]);
 
   useEffect(() => {
     Promise.all([
       api.listWaQuickTemplates().catch(() => []),
-      api.listDocuments({ related_module: 'leads', related_record_id: lead.id }).catch(() => []),
+      api.listDocuments({ related_module: subject.module, related_record_id: subject.id }).catch(() => []),
     ]).then(([t, d]) => {
       setTemplates(Array.isArray(t) ? t : []);
       setDocs(Array.isArray(d) ? d : []);
     }).finally(() => setLoading(false));
-  }, [lead.id]);
+  }, [subject.id, subject.module]);
 
   const pick = (t) => {
     setSelectedId(t.id);
@@ -95,7 +108,7 @@ export default function WhatsAppTemplateModal({ lead, senderName, onClose }) {
             </span>
             <div>
               <h2 className="t-section">Send WhatsApp</h2>
-              <p className="t-meta">{lead.student_name}{phone ? ` · ${lead.mobile}` : ''}</p>
+              <p className="t-meta">{subject.name}{phone ? ` · ${subject.phone}` : ''}</p>
             </div>
           </div>
           <button onClick={onClose} aria-label="Close"
@@ -108,7 +121,7 @@ export default function WhatsAppTemplateModal({ lead, senderName, onClose }) {
           {!phone && (
             <div className="text-sm rounded-lg px-3 py-2"
               style={{ background: 'var(--color-danger-soft)', color: 'var(--color-danger)' }}>
-              This lead has no mobile number, so WhatsApp can't be opened.
+              This record has no phone number, so WhatsApp can't be opened.
             </div>
           )}
 
