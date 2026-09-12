@@ -8,6 +8,12 @@
    that disagrees with the table beneath it.
    ------------------------------------------------------------------ */
 
+import {
+  Building2, UserCheck, Target, Users, Mail, Phone, TrendingUp, Trophy, IndianRupee,
+  FileText, CheckCircle2, Repeat, CalendarClock, LifeBuoy, AlertTriangle, CheckSquare,
+  Clock, Package, Wallet, PhoneCall, Paperclip, Link2,
+} from 'lucide-react';
+
 const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 const count = (rows, fn) => rows.filter(fn).length;
 const sum = (rows, fn, get) => rows.filter(fn).reduce((s, r) => s + (Number(get(r)) || 0), 0);
@@ -21,85 +27,85 @@ export const LIST_KPIS = {
   // page for. Computed from open_pipeline_value, which the accounts list
   // endpoint now returns per row.
   accounts: (rows) => [
-    { label: 'Total accounts', value: rows.length, tone: 'info' },
-    { label: 'Customers', value: count(rows, (r) => r.account_type === 'Customer'), tone: 'success',
+    { label: 'Total accounts', icon: Building2, value: rows.length, tone: 'info' },
+    { label: 'Customers', icon: UserCheck, value: count(rows, (r) => r.account_type === 'Customer'), tone: 'success',
       filter: (r) => r.account_type === 'Customer' },
-    { label: 'Prospects', value: count(rows, (r) => r.account_type === 'Prospect'), tone: 'warning',
+    { label: 'Prospects', icon: Target, value: count(rows, (r) => r.account_type === 'Prospect'), tone: 'warning',
       filter: (r) => r.account_type === 'Prospect' },
-    { label: 'Open pipeline', value: inr(sum(rows, () => true, (r) => r.open_pipeline_value)), tone: 'special' },
+    { label: 'Open pipeline', icon: IndianRupee, value: inr(sum(rows, () => true, (r) => r.open_pipeline_value)), tone: 'special' },
   ],
   contacts: (rows) => [
-    { label: 'Total contacts', value: rows.length, tone: 'info' },
-    { label: 'Active', value: count(rows, (r) => r.contact_status === 'Active'), tone: 'success',
+    { label: 'Total contacts', icon: Users, value: rows.length, tone: 'info' },
+    { label: 'Active', icon: CheckCircle2, value: count(rows, (r) => r.contact_status === 'Active'), tone: 'success',
       filter: (r) => r.contact_status === 'Active' },
-    { label: 'With email', value: count(rows, (r) => r.email), tone: 'neutral' },
-    { label: 'With phone', value: count(rows, (r) => r.mobile || r.phone), tone: 'neutral' },
+    { label: 'With email', icon: Mail, value: count(rows, (r) => r.email), tone: 'neutral' },
+    { label: 'With phone', icon: Phone, value: count(rows, (r) => r.mobile || r.phone), tone: 'neutral' },
   ],
   opportunities: (rows) => [
-    { label: 'Open deals', value: count(rows, isOpenStage), tone: 'info', filter: isOpenStage },
-    { label: 'Open value', value: inr(sum(rows, isOpenStage, (r) => r.amount)), tone: 'special' },
-    { label: 'Weighted', value: inr(rows.filter(isOpenStage).reduce((s, r) => s + (Number(r.amount) || 0) * ((r.probability ?? 0) / 100), 0)), tone: 'warning' },
-    { label: 'Won', value: count(rows, (r) => r.is_won || r.stage === 'Won'), tone: 'success',
+    { label: 'Open deals', icon: TrendingUp, value: count(rows, isOpenStage), tone: 'info', filter: isOpenStage },
+    { label: 'Open value', icon: IndianRupee, value: inr(sum(rows, isOpenStage, (r) => r.amount)), tone: 'special' },
+    { label: 'Weighted', icon: Target, value: inr(rows.filter(isOpenStage).reduce((s, r) => s + (Number(r.amount) || 0) * ((r.probability ?? 0) / 100), 0)), tone: 'warning' },
+    { label: 'Won', icon: Trophy, value: count(rows, (r) => r.is_won || r.stage === 'Won'), tone: 'success',
       filter: (r) => r.is_won || r.stage === 'Won' },
   ],
   quotations: (rows) => [
-    { label: 'Total quotes', value: rows.length, tone: 'info' },
-    { label: 'Sent', value: count(rows, (r) => r.status === 'Sent'), tone: 'warning',
+    { label: 'Total quotes', icon: FileText, value: rows.length, tone: 'info' },
+    { label: 'Sent', icon: Mail, value: count(rows, (r) => r.status === 'Sent'), tone: 'warning',
       filter: (r) => r.status === 'Sent' },
-    { label: 'Accepted', value: count(rows, (r) => r.status === 'Accepted'), tone: 'success',
+    { label: 'Accepted', icon: CheckCircle2, value: count(rows, (r) => r.status === 'Accepted'), tone: 'success',
       filter: (r) => r.status === 'Accepted' },
-    { label: 'Total value', value: inr(sum(rows, () => true, (r) => r.grand_total)), tone: 'special' },
+    { label: 'Total value', icon: IndianRupee, value: inr(sum(rows, () => true, (r) => r.grand_total)), tone: 'special' },
   ],
   subscriptions: (rows) => [
-    { label: 'Subscriptions', value: rows.length, tone: 'info' },
-    { label: 'Active', value: count(rows, (r) => r.status === 'Active'), tone: 'success' },
+    { label: 'Subscriptions', icon: Repeat, value: rows.length, tone: 'info' },
+    { label: 'Active', icon: CheckCircle2, value: count(rows, (r) => r.status === 'Active'), tone: 'success' },
     // Normalised to a monthly figure so cycles are comparable.
-    { label: 'MRR', value: inr(rows.filter((r) => r.status === 'Active').reduce((s, r) => {
+    { label: 'MRR', icon: IndianRupee, value: inr(rows.filter((r) => r.status === 'Active').reduce((s, r) => {
       const amt = Number(r.recurring_amount) || 0;
       return s + (r.billing_cycle === 'Yearly' ? amt / 12 : r.billing_cycle === 'Quarterly' ? amt / 3 : amt);
     }, 0)), tone: 'success' },
-    { label: 'Renewing ≤30d', value: count(rows, (r) => r.status === 'Active' && r.renewal_date
+    { label: 'Renewing ≤30d', icon: CalendarClock, value: count(rows, (r) => r.status === 'Active' && r.renewal_date
       && (new Date(r.renewal_date) - Date.now()) / 86400000 <= 30), tone: 'warning' },
   ],
   tickets: (rows) => [
-    { label: 'Total tickets', value: rows.length, tone: 'info' },
-    { label: 'Open', value: count(rows, (r) => !['Resolved', 'Closed'].includes(r.status)), tone: 'warning',
+    { label: 'Total tickets', icon: LifeBuoy, value: rows.length, tone: 'info' },
+    { label: 'Open', icon: AlertTriangle, value: count(rows, (r) => !['Resolved', 'Closed'].includes(r.status)), tone: 'warning',
       filter: (r) => !['Resolved', 'Closed'].includes(r.status) },
-    { label: 'High / urgent', value: count(rows, (r) => ['High', 'Urgent'].includes(r.priority) && !['Resolved', 'Closed'].includes(r.status)), tone: 'danger',
+    { label: 'High / urgent', icon: AlertTriangle, value: count(rows, (r) => ['High', 'Urgent'].includes(r.priority) && !['Resolved', 'Closed'].includes(r.status)), tone: 'danger',
       filter: (r) => ['High', 'Urgent'].includes(r.priority) && !['Resolved', 'Closed'].includes(r.status) },
-    { label: 'Resolved', value: count(rows, (r) => ['Resolved', 'Closed'].includes(r.status)), tone: 'success',
+    { label: 'Resolved', icon: CheckCircle2, value: count(rows, (r) => ['Resolved', 'Closed'].includes(r.status)), tone: 'success',
       filter: (r) => ['Resolved', 'Closed'].includes(r.status) },
   ],
   tasks: (rows) => [
-    { label: 'Total tasks', value: rows.length, tone: 'info' },
-    { label: 'Open', value: count(rows, (r) => r.status !== 'Completed'), tone: 'warning',
+    { label: 'Total tasks', icon: CheckSquare, value: rows.length, tone: 'info' },
+    { label: 'Open', icon: AlertTriangle, value: count(rows, (r) => r.status !== 'Completed'), tone: 'warning',
       filter: (r) => r.status !== 'Completed' },
-    { label: 'Overdue', value: count(rows, (r) => r.status !== 'Completed' && r.due_date && String(r.due_date).slice(0, 10) < today()), tone: 'danger',
+    { label: 'Overdue', icon: Clock, value: count(rows, (r) => r.status !== 'Completed' && r.due_date && String(r.due_date).slice(0, 10) < today()), tone: 'danger',
       filter: (r) => r.status !== 'Completed' && r.due_date && String(r.due_date).slice(0, 10) < today() },
-    { label: 'Completed', value: count(rows, (r) => r.status === 'Completed'), tone: 'success',
+    { label: 'Completed', icon: CheckCircle2, value: count(rows, (r) => r.status === 'Completed'), tone: 'success',
       filter: (r) => r.status === 'Completed' },
   ],
   products: (rows) => [
-    { label: 'Products', value: rows.length, tone: 'info' },
-    { label: 'Active', value: count(rows, (r) => r.status === 'Active' || r.active), tone: 'success' },
+    { label: 'Products', icon: Package, value: rows.length, tone: 'info' },
+    { label: 'Active', icon: CheckCircle2, value: count(rows, (r) => r.status === 'Active' || r.active), tone: 'success' },
   ],
   payments: (rows) => [
-    { label: 'Payments', value: rows.length, tone: 'info' },
-    { label: 'Collected', value: inr(sum(rows, (r) => r.status === 'Paid', (r) => r.amount)), tone: 'success' },
-    { label: 'Pending', value: count(rows, (r) => r.status === 'Pending'), tone: 'warning' },
+    { label: 'Payments', icon: Wallet, value: rows.length, tone: 'info' },
+    { label: 'Collected', icon: IndianRupee, value: inr(sum(rows, (r) => r.status === 'Paid', (r) => r.amount)), tone: 'success' },
+    { label: 'Pending', icon: Clock, value: count(rows, (r) => r.status === 'Pending'), tone: 'warning' },
   ],
   calls: (rows) => [
-    { label: 'Calls', value: rows.length, tone: 'info' },
-    { label: 'Connected', value: count(rows, (r) => r.connected === 1), tone: 'success' },
+    { label: 'Calls', icon: PhoneCall, value: rows.length, tone: 'info' },
+    { label: 'Connected', icon: CheckCircle2, value: count(rows, (r) => r.connected === 1), tone: 'success' },
   ],
   meetings: (rows) => [
-    { label: 'Meetings', value: rows.length, tone: 'info' },
-    { label: 'Upcoming', value: count(rows, (r) => r.start_datetime && new Date(r.start_datetime) > new Date()), tone: 'warning' },
+    { label: 'Meetings', icon: CalendarClock, value: rows.length, tone: 'info' },
+    { label: 'Upcoming', icon: Clock, value: count(rows, (r) => r.start_datetime && new Date(r.start_datetime) > new Date()), tone: 'warning' },
   ],
   documents: (rows) => [
-    { label: 'Documents', value: rows.length, tone: 'info' },
-    { label: 'Files', value: count(rows, (r) => r.file_name), tone: 'neutral' },
-    { label: 'Links', value: count(rows, (r) => r.external_url), tone: 'neutral' },
+    { label: 'Documents', icon: Paperclip, value: rows.length, tone: 'info' },
+    { label: 'Files', icon: FileText, value: count(rows, (r) => r.file_name), tone: 'neutral' },
+    { label: 'Links', icon: Link2, value: count(rows, (r) => r.external_url), tone: 'neutral' },
   ],
 };
 

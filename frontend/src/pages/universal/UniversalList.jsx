@@ -30,7 +30,7 @@ const TONE_GRADIENTS = {
   neutral: ['#A7F3D0', '#0F766E'],
 };
 
-function ModuleKpi({ label, value, tone, accent, index, clickable, active, onClick }) {
+function ModuleKpi({ label, value, tone, accent, index, icon: Icon, clickable, active, onClick }) {
   // The first tile always carries the module's own identity colour; the
   // rest use their semantic tone so status still reads correctly.
   const [from, to] = index === 0
@@ -48,7 +48,10 @@ function ModuleKpi({ label, value, tone, accent, index, clickable, active, onCli
       style={active ? { boxShadow: `0 0 0 2px ${to}` } : undefined}>
       <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${from}, ${to})` }} />
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl shrink-0" style={{ background: `linear-gradient(135deg, ${from}, ${to})` }} />
+        <div className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center text-white shadow-sm"
+          style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}>
+          {Icon && <Icon className="w-[18px] h-[18px]" />}
+        </div>
         <div className="min-w-0">
           <div className="text-xl font-bold text-ink leading-none">{value}</div>
           <div className="text-xs text-slate-500 mt-1 truncate">{label}</div>
@@ -215,7 +218,28 @@ export default function UniversalList() {
 
 
   return (
-    <div className="max-w-[1600px] mx-auto">
+    <div className="relative max-w-[1600px] mx-auto rounded-3xl -m-4 sm:-m-6 p-4 sm:p-6">
+      {/* Background treatment, tinted by THIS module's accent — so Accounts
+          sits on a faint blue wash and Tickets on a rose one, while the
+          treatment itself (dot grid + corner blooms) is identical
+          everywhere. That's the uniform-system / distinct-module split
+          applied to the canvas rather than just the components.
+
+          Every layer is pointer-events-none behind a negative z-index, so
+          it can never intercept a click or sit on top of content. */}
+      <div aria-hidden="true" className="absolute inset-0 -z-10 overflow-hidden rounded-3xl pointer-events-none">
+        <div className="absolute inset-0 opacity-60" style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, ${accent.solid}14 1px, transparent 0)`,
+          backgroundSize: '26px 26px',
+        }} />
+        <div className="absolute -top-28 -right-24 w-[420px] h-[420px] rounded-full" style={{
+          background: `radial-gradient(circle, ${accent.solid}14, transparent 70%)`,
+        }} />
+        <div className="absolute -bottom-32 -left-24 w-[380px] h-[380px] rounded-full" style={{
+          background: `radial-gradient(circle, ${accent.solid}0F, transparent 70%)`,
+        }} />
+      </div>
+
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-white shadow-sm"
@@ -248,7 +272,7 @@ export default function UniversalList() {
       {kpis && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
           {kpis.map((k, i) => (
-            <ModuleKpi key={k.label} label={k.label} value={k.value} tone={k.tone} accent={accent} index={i}
+            <ModuleKpi key={k.label} label={k.label} value={k.value} tone={k.tone} accent={accent} index={i} icon={k.icon}
               clickable={!!k.filter} active={kpiFilter === k.label}
               onClick={k.filter ? () => setKpiFilter(kpiFilter === k.label ? null : k.label) : undefined} />
           ))}
@@ -317,8 +341,20 @@ export default function UniversalList() {
                 {listFields.length > 0 ? listFields.map((f, i) => (
                   <td key={f.id} className="py-3 px-4">
                     {i === 0 ? (
-                      <Link to={`/records/${module.api_name}/${r.id}`} onClick={(e) => e.stopPropagation()} className="text-ink font-medium hover:text-amber">
-                        {formatFieldValue(getFieldValue(r, f), f)}
+                      // An initials chip on the primary column. The first
+                      // cell was plain text with nothing to anchor the eye,
+                      // which is a large part of why the table read as flat.
+                      // Deterministic per record name, in the module accent.
+                      <Link to={`/records/${module.api_name}/${r.id}`} onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-2.5 group">
+                        <span className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0 shadow-sm"
+                          style={{ background: `linear-gradient(135deg, ${accent.from}, ${accent.to})` }}>
+                          {String(formatFieldValue(getFieldValue(r, f), f) || '?')
+                            .split(' ').filter(Boolean).slice(0, 2).map((wd) => wd[0]).join('').toUpperCase()}
+                        </span>
+                        <span className="text-ink font-medium group-hover:text-[var(--color-brand)] truncate">
+                          {formatFieldValue(getFieldValue(r, f), f)}
+                        </span>
                       </Link>
                     ) : f.api_name === statusField?.api_name ? (
                       <StatusBadge status={getFieldValue(r, f)} />
