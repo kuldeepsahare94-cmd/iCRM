@@ -10,7 +10,8 @@ import { usePermissions } from '../context/usePermissions';
 import StatusBadge from '../components/StatusBadge';
 import DisposeLeadModal from '../components/DisposeLeadModal';
 import WhatsAppTemplateModal from '../components/WhatsAppTemplateModal';
-import { accentFor, accentGradient } from '../theme/moduleAccents';
+import { accentFor } from '../theme/moduleAccents';
+import { avatarGradientFor } from '../theme/avatarColors';
 import { CallsTab, MeetingsTab, TasksTab, DocumentsTab, DealsTab, NotesTab } from '../components/LeadRelatedTabs';
 
 const FUNNEL_STAGES = ['New', 'Contacted', 'Interested', 'Follow-up', 'Converted'];
@@ -331,7 +332,7 @@ export default function LeadDetail() {
         <div className="relative flex items-start justify-between flex-wrap gap-4">
           <div className="flex items-start gap-3.5 min-w-0">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center font-bold text-white text-xl shrink-0 shadow-md"
-              style={{ background: accentGradient('leads') }}>
+              style={{ background: avatarGradientFor(lead.student_name) }}>
               {initialsOf(lead.student_name)}
             </div>
             <div className="min-w-0">

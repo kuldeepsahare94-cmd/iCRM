@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { Kanban as KanbanIcon, Search, MoreHorizontal, Eye, Pencil, LayoutGrid } from 'lucide-react';
 import { ModuleIcon } from '../../components/moduleIcons';
 import { accentFor, accentGradient } from '../../theme/moduleAccents';
+import { avatarGradientFor, initialsOf } from '../../theme/avatarColors';
 import QuotationItemsEditor from './QuotationItemsEditor';
 import { api } from '../../api';
 import { usePermissions } from '../../context/usePermissions';
@@ -227,19 +228,20 @@ export default function UniversalList() {
 
           Every layer is pointer-events-none behind a negative z-index, so
           it can never intercept a click or sit on top of content. */}
-      <div aria-hidden="true" className="absolute inset-0 -z-10 overflow-hidden rounded-3xl pointer-events-none">
-        <div className="absolute inset-0 opacity-60" style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, ${accent.solid}14 1px, transparent 0)`,
-          backgroundSize: '26px 26px',
+      <div aria-hidden="true" className="absolute inset-0 z-0 overflow-hidden rounded-3xl pointer-events-none">
+        <div className="absolute inset-0" style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, ${accent.solid}33 1px, transparent 0)`,
+          backgroundSize: '22px 22px',
         }} />
-        <div className="absolute -top-28 -right-24 w-[420px] h-[420px] rounded-full" style={{
-          background: `radial-gradient(circle, ${accent.solid}14, transparent 70%)`,
+        <div className="absolute -top-32 -right-28 w-[520px] h-[520px] rounded-full" style={{
+          background: `radial-gradient(circle, ${accent.solid}38, transparent 70%)`,
         }} />
-        <div className="absolute -bottom-32 -left-24 w-[380px] h-[380px] rounded-full" style={{
-          background: `radial-gradient(circle, ${accent.solid}0F, transparent 70%)`,
+        <div className="absolute -bottom-36 -left-28 w-[460px] h-[460px] rounded-full" style={{
+          background: `radial-gradient(circle, ${accent.solid}2E, transparent 70%)`,
         }} />
       </div>
 
+      <div className="relative z-10">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-white shadow-sm"
@@ -319,7 +321,7 @@ export default function UniversalList() {
       <div className="card mt-6 overflow-hidden overflow-x-auto shadow-sm">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left bg-[var(--color-canvas)] border-b border-line">
+            <tr className="text-left border-b-2" style={{ background: `${accent.solid}0D`, borderColor: `${accent.solid}33` }}>
               {listFields.map((f) => <th key={f.id} className="py-3 px-4 font-medium">{f.label}</th>)}
               {listFields.length === 0 && <th className="py-3 px-4 font-medium">Record</th>}
               {followupField && <th className="py-3 px-4 font-medium">Follow-up</th>}
@@ -336,7 +338,9 @@ export default function UniversalList() {
           </thead>
           <tbody>
             {pageRows.map((r) => (
-              <tr key={r.id} className="border-b border-line/60 hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+              <tr key={r.id} className="border-b border-line/60 transition-colors cursor-pointer"
+                onMouseEnter={(e) => { e.currentTarget.style.background = `${accent.solid}0A`; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
                 onClick={() => navigate(`/records/${module.api_name}/${r.id}`)}>
                 {listFields.length > 0 ? listFields.map((f, i) => (
                   <td key={f.id} className="py-3 px-4">
@@ -348,9 +352,8 @@ export default function UniversalList() {
                       <Link to={`/records/${module.api_name}/${r.id}`} onClick={(e) => e.stopPropagation()}
                         className="flex items-center gap-2.5 group">
                         <span className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0 shadow-sm"
-                          style={{ background: `linear-gradient(135deg, ${accent.from}, ${accent.to})` }}>
-                          {String(formatFieldValue(getFieldValue(r, f), f) || '?')
-                            .split(' ').filter(Boolean).slice(0, 2).map((wd) => wd[0]).join('').toUpperCase()}
+                          style={{ background: avatarGradientFor(formatFieldValue(getFieldValue(r, f), f)) }}>
+                          {initialsOf(formatFieldValue(getFieldValue(r, f), f))}
                         </span>
                         <span className="text-ink font-medium group-hover:text-[var(--color-brand)] truncate">
                           {formatFieldValue(getFieldValue(r, f), f)}
@@ -442,6 +445,7 @@ export default function UniversalList() {
             )}
           </div>
         )}
+      </div>
       </div>
     </div>
   );
