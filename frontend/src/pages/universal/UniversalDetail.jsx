@@ -57,6 +57,65 @@ function subpanelColumns(row) {
 // One field row. Empty values render an em-dash instead of collapsing,
 // so rows stay aligned and a blank field is visibly blank rather than
 // looking like a layout bug.
+
+// Where a subpanel row links to. The relation key is the target module's
+// api_name, so /records/<key>/<id> is right for everything that uses the
+// universal detail page; leads and payments have their own pages.
+const BESPOKE_ROUTES = { leads: (id) => `/leads/${id}`, payments: (id) => `/payments/${id}` };
+
+function relationRecordPath(relationKey, rowId) {
+  if (!rowId) return null;
+  const bespoke = BESPOKE_ROUTES[relationKey];
+  return bespoke ? bespoke(rowId) : `/records/${relationKey}/${rowId}`;
+}
+
+
+// What to surface in the record hero, derived from fields that actually
+// exist on this module rather than a hardcoded per-module list — so a
+// contact shows its phone, a ticket shows its requester, and a module
+// added later gets the same treatment with no code change.
+function heroSummary(record, fields) {
+  const byType = (t) => fields.find((f) => f.field_type === t);
+  const byName = (re) => fields.find((f) => re.test(f.api_name));
+
+  const phoneField = byType('phone') || byName(/^(phone|mobile)$/i);
+  const emailField = byType('email') || byName(/^email$/i);
+  const locField = byName(/^(city|location|address|billing_city)$/i);
+
+  const val = (f) => (f ? getFieldValue(record, f) : null);
+
+  // Chips: short categorical values worth seeing immediately. Excludes the
+  // status field (already shown as a badge) and anything long enough to be
+  // prose rather than a label.
+  const chipFields = fields.filter((f) => (
+    /type|industry|source|category|priority|segment|rating|plan/i.test(f.api_name)
+    && !/status/i.test(f.api_name)
+  ));
+  const chips = chipFields
+    .map((f) => formatFieldValue(getFieldValue(record, f), f))
+    .filter((v) => v && String(v).length <= 28);
+
+  return { phone: val(phoneField), email: val(emailField), location: val(locField), chips };
+}
+
+// Relationship scale, counted from the relation arrays the detail endpoint
+// already returned. No extra request, and it can't disagree with the tabs
+// because it is literally the same data.
+const HERO_COUNT_KEYS = [
+  { key: 'contacts', label: 'Contacts' },
+  { key: 'opportunities', label: 'Deals' },
+  { key: 'quotations', label: 'Quotes' },
+  { key: 'tickets', label: 'Tickets' },
+  { key: 'subscriptions', label: 'Subscriptions' },
+];
+
+function heroCounts(record) {
+  return HERO_COUNT_KEYS
+    .filter(({ key }) => Array.isArray(record[key]) && record[key].length > 0)
+    .map(({ key, label }) => ({ label, value: record[key].length }))
+    .slice(0, 4);
+}
+
 function DetailRow({ label, value }) {
   const empty = value === null || value === undefined || value === '';
   return (
@@ -99,23 +158,20 @@ function groupFields(fieldList) {
   return out;
 }
 
-function FollowUpPanel({ module, fields, record, showWhatsApp, onGoToWhatsApp, onUpdated }) {
+function FollowUpPanel({ module, fields, record, onUpdated }) {
   const followupField = useMemo(() => findFollowupField(fields), [fields]);
-  const phoneField = useMemo(() => fields.find((f) => f.field_type === 'phone'), [fields]);
-  const emailField = useMemo(() => fields.find((f) => f.field_type === 'email'), [fields]);
   const [showSetDate, setShowSetDate] = useState(false);
   const [dateValue, setDateValue] = useState('');
-  const [showQuickTask, setShowQuickTask] = useState(false);
-  const [showQuickMeeting, setShowQuickMeeting] = useState(false);
-  const [quickTitle, setQuickTitle] = useState('');
-  const [quickDate, setQuickDate] = useState('');
   const [busy, setBusy] = useState(false);
 
-  if (!followupField && !phoneField && !emailField) return null; // nothing this module can meaningfully offer
+  // The panel's ONLY remaining job is the follow-up date — the Call /
+  // WhatsApp / Email / Meeting / Task buttons moved to the Quick Actions
+  // bar. The old guard also allowed phone/email fields to keep it alive,
+  // which is why Accounts (phone + email, no follow-up field) rendered an
+  // empty white card above Quick Actions.
+  if (!followupField) return null;
 
   const status = followupField ? computeFollowupStatus(getFieldValue(record, followupField)) : null;
-  const phone = phoneField ? getFieldValue(record, phoneField) : null;
-  const email = emailField ? getFieldValue(record, emailField) : null;
 
   const saveFollowupDate = async () => {
     if (!dateValue) return;
@@ -126,28 +182,6 @@ function FollowUpPanel({ module, fields, record, showWhatsApp, onGoToWhatsApp, o
       setShowSetDate(false);
       onUpdated();
     } catch (err) { alert('Could not save: ' + err.message); } finally { setBusy(false); }
-  };
-
-  const createQuickTask = async () => {
-    if (!quickTitle.trim()) return;
-    setBusy(true);
-    try {
-      await api.universalCreate({ api_name: 'tasks', table_name: 'tasks' }, {
-        task_title: quickTitle, due_date: quickDate || null, related_module: module.api_name, related_record_id: record.id,
-      });
-      setQuickTitle(''); setQuickDate(''); setShowQuickTask(false);
-    } catch (err) { alert('Could not create task: ' + err.message); } finally { setBusy(false); }
-  };
-
-  const createQuickMeeting = async () => {
-    if (!quickTitle.trim()) return;
-    setBusy(true);
-    try {
-      await api.universalCreate({ api_name: 'meetings', table_name: 'meetings' }, {
-        meeting_title: quickTitle, start_datetime: quickDate || null, related_module: module.api_name, related_record_id: record.id,
-      });
-      setQuickTitle(''); setQuickDate(''); setShowQuickMeeting(false);
-    } catch (err) { alert('Could not schedule meeting: ' + err.message); } finally { setBusy(false); }
   };
 
   return (
@@ -161,7 +195,7 @@ function FollowUpPanel({ module, fields, record, showWhatsApp, onGoToWhatsApp, o
         )}
         <div className="flex flex-wrap gap-2">
           {followupField && (
-            <button onClick={() => { setShowSetDate((s) => !s); setShowQuickTask(false); setShowQuickMeeting(false); }} className="text-xs bg-amber text-white rounded-lg px-3 py-1.5 hover:opacity-90">Set follow-up</button>
+            <button onClick={() => setShowSetDate((s) => !s)} className="text-xs bg-amber text-white rounded-lg px-3 py-1.5 hover:opacity-90">Set follow-up</button>
           )}
         </div>
       </div>
@@ -170,20 +204,6 @@ function FollowUpPanel({ module, fields, record, showWhatsApp, onGoToWhatsApp, o
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-line">
           <input type="date" value={dateValue} onChange={(e) => setDateValue(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-sm" />
           <button onClick={saveFollowupDate} disabled={busy} className="bg-amber text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50">Save</button>
-        </div>
-      )}
-      {showQuickTask && (
-        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-line flex-wrap">
-          <input placeholder="Task title" value={quickTitle} onChange={(e) => setQuickTitle(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-sm flex-1 min-w-[160px]" />
-          <input type="date" value={quickDate} onChange={(e) => setQuickDate(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-sm" />
-          <button onClick={createQuickTask} disabled={busy} className="bg-amber text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50">Create</button>
-        </div>
-      )}
-      {showQuickMeeting && (
-        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-line flex-wrap">
-          <input placeholder="Meeting title" value={quickTitle} onChange={(e) => setQuickTitle(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-sm flex-1 min-w-[160px]" />
-          <input type="datetime-local" value={quickDate} onChange={(e) => setQuickDate(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-sm" />
-          <button onClick={createQuickMeeting} disabled={busy} className="bg-amber text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50">Schedule</button>
         </div>
       )}
     </div>
@@ -674,11 +694,80 @@ export default function UniversalDetail() {
             {initialsOf(title)}
           </div>
           <div className="min-w-0">
-            <h1 className="t-page-title">{title}</h1>
-            {statusField && <div className="mt-1.5"><StatusBadge status={getFieldValue(record, statusField)} /></div>}
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="t-page-title">{title}</h1>
+              {statusField && <StatusBadge status={getFieldValue(record, statusField)} />}
+            </div>
+
+            {/* Contact line — the hero previously carried nothing but the
+                name, so the most-needed details sat a scroll away inside
+                Overview. Each is actionable where it can be. */}
+            {(() => {
+              const h = heroSummary(record, fields);
+              const hasAny = h.phone || h.email || h.location;
+              return (
+                <>
+                  {hasAny && (
+                    <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1.5 text-sm text-slate-500">
+                      {h.phone && (
+                        <span className="flex items-center gap-1.5">
+                          <PhoneCall className="w-3.5 h-3.5" /> {h.phone}
+                          <a href={`tel:${h.phone}`} aria-label="Call"
+                            className="text-[var(--color-brand)] hover:opacity-70"><PhoneCall className="w-3.5 h-3.5" /></a>
+                          <a href={`https://wa.me/${String(h.phone).replace(/\D/g, '')}`} target="_blank" rel="noreferrer"
+                            aria-label="WhatsApp" className="text-[var(--color-success)] hover:opacity-70">
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </a>
+                        </span>
+                      )}
+                      {h.email && (
+                        <span className="flex items-center gap-1.5 truncate">
+                          <Send className="w-3.5 h-3.5" /> {h.email}
+                          <a href={`mailto:${h.email}`} aria-label="Email"
+                            className="text-[var(--color-brand)] hover:opacity-70 shrink-0"><Send className="w-3.5 h-3.5" /></a>
+                        </span>
+                      )}
+                      {h.location && <span className="text-slate-500">{h.location}</span>}
+                    </div>
+                  )}
+                  {h.chips.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {h.chips.map((c) => (
+                        <span key={c} className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                          style={{ background: `${accentFor(module.api_name).solid}14`, color: accentFor(module.api_name).solid }}>
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Relationship scale, counted from the relation arrays the detail
+              endpoint already returned — no extra request, and it cannot
+              disagree with the tab it mirrors because it is the same data.
+              Each is clickable, jumping to that tab, so it is a control
+              rather than a dead readout. */}
+          {(() => {
+            const counts = heroCounts(record);
+            if (counts.length === 0) return null;
+            return (
+              <div className="flex items-center gap-4 pr-4 border-r border-line">
+                {counts.map((c) => (
+                  <button key={c.label}
+                    onClick={() => setTab(c.label === 'Deals' ? 'opportunities' : c.label.toLowerCase())}
+                    className="text-center hover:opacity-70 transition-opacity">
+                    <div className="text-lg font-bold text-ink leading-none">{c.value}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">{c.label}</div>
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
+
           {can(module.api_name, 'edit') && !editing && (
             <button onClick={startEdit} className="border border-line text-sm font-medium px-4 py-2 rounded-lg hover:bg-white inline-flex items-center gap-2">
               <Pencil className="w-4 h-4" /> Edit
@@ -700,14 +789,15 @@ export default function UniversalDetail() {
         </div>
       )}
 
-      {module.api_name === 'quotations' && <QuotationActionsPanel recordId={id} record={record} onUpdated={load} />}
+      <FollowUpPanel module={module} fields={fields} record={record} onUpdated={load} />
 
-      {module.api_name !== 'documents' && <DocumentsPanel moduleApiName={module.api_name} recordId={id} />}
+      {module.api_name === 'quotations' && <QuotationActionsPanel recordId={id} record={record} onUpdated={load} />}
 
       <AiAnalysisPanel moduleApiName={module.api_name} recordId={id} />
 
-      <FollowUpPanel module={module} fields={fields} record={record} showWhatsApp={showWhatsApp}
-        onGoToWhatsApp={() => setTab('whatsapp')} onUpdated={load} />
+      {module.api_name !== 'documents' && !embeddedRelations.some(([k]) => k === 'documents') && (
+        <DocumentsPanel moduleApiName={module.api_name} recordId={id} />
+      )}
 
       {/* Quick actions — the same bar the Lead detail page has, now on
           every module. Which actions appear depends on what the record can
@@ -716,7 +806,6 @@ export default function UniversalDetail() {
           do anything. Creating a meeting/task/note routes into the existing
           relation-tab machinery rather than duplicating it. */}
       {(() => {
-        const phone = record.phone || record.mobile || null;
         const actions = [
           { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, from: '#4ADE80', to: '#15803D',
             run: () => setWaOpen(true) },
@@ -853,11 +942,24 @@ export default function UniversalDetail() {
                   <tr key={row.id} className="border-b border-line/60 transition-colors"
                     onMouseEnter={(e) => { e.currentTarget.style.background = `${accentFor(module.api_name).solid}0A`; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
-                    {subpanelColumns(rows[0]).map((k, ci) => (
-                      <td key={k} className={`py-3 px-4 ${ci === 0 ? 'text-ink font-medium' : 'text-slate-600'}`}>
-                        {row[k] === null || row[k] === undefined || row[k] === '' ? '—' : String(row[k])}
-                      </td>
-                    ))}
+                    {subpanelColumns(rows[0]).map((k, ci) => {
+                      const empty = row[k] === null || row[k] === undefined || row[k] === '';
+                      const text = empty ? '—' : String(row[k]);
+                      const href = ci === 0 ? relationRecordPath(key, row.id) : null;
+                      return (
+                        <td key={k} className={`py-3 px-4 ${ci === 0 ? 'font-medium' : 'text-slate-600'}`}>
+                          {href
+                            ? (
+                              <Link to={href} onClick={(e) => e.stopPropagation()}
+                                className="hover:underline"
+                                style={{ color: accentFor(key).solid }}>
+                                {text}
+                              </Link>
+                            )
+                            : <span className={ci === 0 ? 'text-ink' : undefined}>{text}</span>}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
