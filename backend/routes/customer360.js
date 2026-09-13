@@ -186,6 +186,16 @@ router.get('/accounts/:id', requirePermission('accounts', 'view'), (req, res) =>
 });
 
 // Lead score with its full explanation, for the lead detail header.
+// Lightweight score-only endpoint, mirroring the lead one. The account
+// header needs the score and health band without paying for the full
+// Customer 360 payload (15 sections of relations), which would be a heavy
+// request just to render two small rings.
+router.get('/accounts/:id/score', requirePermission('accounts', 'view'), (req, res) => {
+  const result = scoreAccount(Number(req.params.id));
+  if (!result) return res.status(404).json({ error: 'Account not found' });
+  res.json(result);
+});
+
 router.get('/leads/:id/score', requirePermission('leads', 'view'), (req, res) => {
   const result = scoreLead(Number(req.params.id));
   if (!result) return res.status(404).json({ error: 'Lead not found' });
