@@ -188,6 +188,26 @@ function MiniScoreRing({ score, band, label }) {
   );
 }
 
+
+// Tab labels come straight from relation keys, which are raw API names —
+// so the bar reads "stageHistory" and "whatsapp" rather than "Stage
+// History" and "WhatsApp". CSS `capitalize` only fixes the first letter,
+// which is why camelCase keys stayed broken.
+const TAB_LABELS = {
+  whatsapp: 'WhatsApp',
+  stageHistory: 'Stage History',
+  related: 'Related',
+  overview: 'Overview',
+};
+
+function tabLabel(key) {
+  if (TAB_LABELS[key]) return TAB_LABELS[key];
+  return String(key)
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function DetailRow({ label, value }) {
   const empty = value === null || value === undefined || value === '';
   return (
@@ -768,6 +788,12 @@ export default function UniversalDetail() {
       <div className="card p-5 relative overflow-hidden">
         <div className="absolute top-0 left-0 right-0 h-[3px]"
           style={{ background: `linear-gradient(90deg, ${accentFor(module.api_name).from}, ${accentFor(module.api_name).to})` }} />
+        {/* Identity wash in this module's own accent — the hero was pure
+            white, so an opportunity, a contact and a ticket all opened to
+            an identical-looking header. */}
+        <div aria-hidden="true" className="absolute inset-0 pointer-events-none" style={{
+          background: `radial-gradient(ellipse 620px 240px at 0% 0%, ${accentFor(module.api_name).solid}14, transparent 68%)`,
+        }} />
         <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3.5 min-w-0">
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-white text-lg shrink-0 shadow-md"
@@ -895,6 +921,12 @@ export default function UniversalDetail() {
               <div className="text-xl font-bold text-ink leading-none tabular-nums tracking-tight mt-1">
                 ₹{Number(record.amount).toLocaleString('en-IN')}
               </div>
+              {record.expected_close_date && (
+                <div className="text-[11px] text-slate-500 mt-1.5 flex items-center justify-end gap-1">
+                  <CalendarPlus className="w-3 h-3" />
+                  Close {String(record.expected_close_date).slice(0, 10)}
+                </div>
+              )}
               {record.stage_name && (
                 <div className="inline-flex items-center gap-1.5 mt-1.5">
                   <span className="w-2 h-2 rounded-full" style={{ background: record.stage_color || accentFor(module.api_name).solid }} />
@@ -989,13 +1021,28 @@ export default function UniversalDetail() {
         );
       })()}
 
-      <div className="flex gap-1 mt-6 border-b border-line">
-        {tabs.map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium capitalize border-b-2 -mb-px ${tab === t ? 'border-amber text-amber' : 'border-transparent text-slate-500 hover:text-ink'}`}>
-            {t.replace(/_/g, ' ')}
-          </button>
-        ))}
+      <div className="flex gap-1 mt-6 border-b border-line overflow-x-auto thin-scroll">
+        {tabs.map((t) => {
+          const rel = embeddedRelations.find(([k]) => k === t);
+          const count = rel ? rel[1].length : null;
+          const active = tab === t;
+          return (
+            <button key={t} onClick={() => setTab(t)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors inline-flex items-center gap-1.5 ${
+                active ? '' : 'border-transparent text-slate-500 hover:text-ink'}`}
+              style={active ? { borderColor: accentFor(module.api_name).solid, color: accentFor(module.api_name).solid } : undefined}>
+              {tabLabel(t)}
+              {count !== null && count > 0 && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                  style={active
+                    ? { background: `${accentFor(module.api_name).solid}1A`, color: accentFor(module.api_name).solid }
+                    : { background: 'var(--color-canvas)', color: 'var(--color-muted)' }}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {tab === 'overview' && (
