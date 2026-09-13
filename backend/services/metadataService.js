@@ -144,6 +144,34 @@ function updateField(fieldId, input) {
   return db.prepare('SELECT * FROM module_fields WHERE id=?').get(fieldId);
 }
 
+
+// How many records actually hold a value in this field. Deleting a custom
+// field destroys its stored values, so the UI needs to be able to say
+// "this will erase data from 14 records" rather than asking someone to
+// confirm an action whose cost is invisible.
+function fieldUsage(fieldId) {
+  const field = db.prepare('SELECT * FROM module_fields WHERE id=?').get(fieldId);
+  if (!field) throw notFound('Field not found');
+  const mod = db.prepare('SELECT * FROM modules WHERE id=?').get(field.module_id);
+
+  // System fields are real columns on the module's own table; custom
+  // fields live in the EAV table. Counting differs accordingly.
+  if (field.is_system && mod?.table_name) {
+    const cols = db.prepare(`PRAGMA table_info(${mod.table_name})`).all().map((c) => c.name);
+    if (!cols.includes(field.api_name)) return { count: 0, total: 0, is_system: 1 };
+    const count = db.prepare(
+      `SELECT COUNT(*) c FROM ${mod.table_name} WHERE ${field.api_name} IS NOT NULL AND TRIM(CAST(${field.api_name} AS TEXT)) <> ''`
+    ).get().c;
+    const total = db.prepare(`SELECT COUNT(*) c FROM ${mod.table_name}`).get().c;
+    return { count, total, is_system: 1 };
+  }
+
+  const count = db.prepare(
+    "SELECT COUNT(*) c FROM custom_field_values WHERE field_id=? AND value IS NOT NULL AND TRIM(value) <> ''"
+  ).get(fieldId).c;
+  return { count, total: count, is_system: 0 };
+}
+
 function deleteField(fieldId) {
   const existing = db.prepare('SELECT * FROM module_fields WHERE id=?').get(fieldId);
   if (!existing) throw notFound('Field not found');
@@ -375,6 +403,7 @@ function badRequest(message) { const e = new Error(message); e.status = 400; ret
 function notFound(message) { const e = new Error(message); e.status = 404; return e; }
 
 module.exports = {
+  fieldUsage,
   listModules, getModule, createModule, updateModule, deleteModule,
   listFields, createField, updateField, deleteField,
   getCustomFieldValues, setCustomFieldValues,

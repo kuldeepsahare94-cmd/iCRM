@@ -35,6 +35,12 @@ router.put('/:moduleId/fields/:fieldId', requirePermission('fields', 'edit'), (r
   handle(res, () => svc.updateField(req.params.fieldId, req.body));
 });
 
+// Used by the delete confirmation so the user is told what the deletion
+// will actually cost before they commit to it.
+router.get('/:moduleId/fields/:fieldId/usage', requirePermission('fields', 'view'), (req, res) => {
+  handle(res, () => svc.fieldUsage(req.params.fieldId));
+});
+
 router.delete('/:moduleId/fields/:fieldId', requirePermission('fields', 'delete'), (req, res) => {
   try { svc.deleteField(req.params.fieldId); res.status(204).end(); }
   catch (e) { res.status(e.status || 500).json({ error: e.message || 'Server error' }); }
