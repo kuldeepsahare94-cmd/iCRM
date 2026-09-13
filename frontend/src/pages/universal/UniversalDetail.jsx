@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Trash2, Pencil, Send, MessageCircle, Sparkles, CheckSquare, FileText, Download, Paperclip, Upload, PhoneCall, CalendarPlus, StickyNote } from 'lucide-react';
+import { ArrowLeft, Trash2, Pencil, Send, MessageCircle, Sparkles, CheckSquare, FileText, Download, Paperclip, Upload, PhoneCall, CalendarPlus, StickyNote, Building2 } from 'lucide-react';
 import { api } from '../../api';
 import { usePermissions } from '../../context/usePermissions';
 import StatusBadge from '../../components/StatusBadge';
@@ -74,6 +74,24 @@ function relationRecordPath(relationKey, rowId) {
 // exist on this module rather than a hardcoded per-module list — so a
 // contact shows its phone, a ticket shows its requester, and a module
 // added later gets the same treatment with no code change.
+// Falls back to the linked account/contact when the record itself has no
+// phone or email — which is the normal case for opportunities, quotations
+// and subscriptions. Labelled with whose number it is, so you know you're
+// calling the contact rather than a main switchboard.
+function linkedComms(record) {
+  const contactName = [record.contact_first_name, record.contact_last_name].filter(Boolean).join(' ').trim();
+  return {
+    company: record.account_name || null,
+    contactName: contactName || null,
+    contactRole: record.contact_job_title || null,
+    phone: record.contact_phone || record.account_phone || null,
+    phoneOwner: record.contact_phone ? (contactName || 'contact') : (record.account_name || 'account'),
+    email: record.contact_email || record.account_email || null,
+    emailOwner: record.contact_email ? (contactName || 'contact') : (record.account_name || 'account'),
+    accountId: record.account_id || null,
+  };
+}
+
 function heroSummary(record, fields) {
   const byType = (t) => fields.find((f) => f.field_type === t);
   const byName = (re) => fields.find((f) => re.test(f.api_name));
@@ -93,7 +111,7 @@ function heroSummary(record, fields) {
   ));
   const chips = chipFields
     .map((f) => formatFieldValue(getFieldValue(record, f), f))
-    .filter((v) => v && String(v).length <= 28);
+    .filter((v) => v && !['—', '-', 'null', 'undefined'].includes(String(v).trim()) && String(v).length <= 28);
 
   return { phone: val(phoneField), email: val(emailField), location: val(locField), chips };
 }
@@ -793,6 +811,50 @@ export default function UniversalDetail() {
                       {h.location && <span className="text-slate-500">{h.location}</span>}
                     </div>
                   )}
+                  {/* Linked customer line — for a record with no contact
+                      fields of its own (an opportunity, quotation,
+                      subscription), this is the only way to reach anyone
+                      without navigating away. Labelled with WHOSE number
+                      it is so you know who picks up. */}
+                  {(() => {
+                    const lc = linkedComms(record);
+                    if (!lc.company && !lc.phone && !lc.email) return null;
+                    return (
+                      <div className="flex items-center flex-wrap gap-x-3 gap-y-1.5 mt-2">
+                        {lc.company && (
+                          <Link to={lc.accountId ? `/records/accounts/${lc.accountId}` : '#'}
+                            className="inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
+                            style={{ color: accentFor('accounts').solid }}>
+                            <Building2 className="w-3.5 h-3.5" /> {lc.company}
+                          </Link>
+                        )}
+                        {lc.contactName && (
+                          <span className="text-sm text-slate-500">
+                            {lc.contactName}{lc.contactRole ? ` · ${lc.contactRole}` : ''}
+                          </span>
+                        )}
+                        {lc.phone && (
+                          <span className="inline-flex items-center gap-1.5 text-sm text-slate-500"
+                            title={`${lc.phoneOwner}'s number`}>
+                            <PhoneCall className="w-3.5 h-3.5" /> {lc.phone}
+                            <a href={`tel:${lc.phone}`} aria-label="Call"
+                              className="text-[var(--color-brand)] hover:opacity-70"><PhoneCall className="w-3.5 h-3.5" /></a>
+                            <a href={`https://wa.me/${String(lc.phone).replace(/\D/g, '')}`} target="_blank" rel="noreferrer"
+                              aria-label="WhatsApp" className="text-[var(--color-success)] hover:opacity-70">
+                              <MessageCircle className="w-3.5 h-3.5" />
+                            </a>
+                          </span>
+                        )}
+                        {lc.email && (
+                          <a href={`mailto:${lc.email}`} title={`${lc.emailOwner}'s email`}
+                            className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-ink truncate">
+                            <Send className="w-3.5 h-3.5" /> {lc.email}
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {h.chips.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {h.chips.map((c) => (
@@ -826,6 +888,24 @@ export default function UniversalDetail() {
               </div>
             );
           })()}
+
+          {(record.amount !== undefined && record.amount !== null) && (
+            <div className="text-right pr-3 border-r border-line">
+              <div className="text-[10px] text-slate-500 uppercase tracking-wide">Value</div>
+              <div className="text-xl font-bold text-ink leading-none tabular-nums tracking-tight mt-1">
+                ₹{Number(record.amount).toLocaleString('en-IN')}
+              </div>
+              {record.stage_name && (
+                <div className="inline-flex items-center gap-1.5 mt-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ background: record.stage_color || accentFor(module.api_name).solid }} />
+                  <span className="text-xs font-medium text-slate-600">{record.stage_name}</span>
+                  {record.probability !== undefined && record.probability !== null && (
+                    <span className="text-xs text-slate-400">· {record.probability}%</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {acctScore && (
             <div className="flex items-center gap-4 pr-3 border-r border-line">
