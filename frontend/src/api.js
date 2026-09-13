@@ -272,6 +272,7 @@ export const api = {
   deleteModuleMeta: (id) => req('DELETE', `/modules/${id}`),
   createModuleField: (moduleId, body) => req('POST', `/modules/${moduleId}/fields`, body),
   updateModuleField: (moduleId, fieldId, body) => req('PUT', `/modules/${moduleId}/fields/${fieldId}`, body),
+  moduleFieldUsage: (moduleId, fieldId) => req('GET', `/modules/${moduleId}/fields/${fieldId}/usage`),
   deleteModuleField: (moduleId, fieldId) => req('DELETE', `/modules/${moduleId}/fields/${fieldId}`),
 
   // Universal CRM — generic record CRUD (works for standard + custom modules)

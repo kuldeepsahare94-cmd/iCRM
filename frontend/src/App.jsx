@@ -14,6 +14,7 @@ import Roles from './pages/Roles';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
 import SettingsModules from './pages/SettingsModules';
+import FieldLayoutManager from './pages/FieldLayoutManager';
 import SettingsWorkflows from './pages/SettingsWorkflows';
 import SettingsPipelines from './pages/SettingsPipelines';
 import SettingsTeams from './pages/SettingsTeams';
@@ -68,6 +69,7 @@ export default function App() {
               <Route path="/users" element={<Users />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/settings/modules" element={<SettingsModules />} />
+              <Route path="/settings/layout" element={<FieldLayoutManager />} />
               <Route path="/settings/workflows" element={<SettingsWorkflows />} />
               <Route path="/settings/pipelines" element={<SettingsPipelines />} />
               <Route path="/settings/teams" element={<SettingsTeams />} />

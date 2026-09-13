@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Settings as SettingsIcon, Plus, Trash2, Sparkles, Database, ShieldCheck, Boxes, Zap, GitBranch, Users2, History, Percent, Mail } from 'lucide-react';
+import { Settings as SettingsIcon, Plus, Trash2, Sparkles, Database, ShieldCheck, Boxes, Zap, GitBranch, Users2, History, Percent, Mail, LayoutList } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 
@@ -194,6 +194,25 @@ export default function Settings() {
           <p className="text-sm text-slate-500 mt-1">Receipt templates and master option lists.</p>
         </div>
       </div>
+
+      {can('settings', 'edit') && (
+        <Link to="/settings/layout"
+          className="card p-5 mt-8 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+              <LayoutList className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-ink">Field &amp; Layout Manager</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Choose which fields appear in the list, form and detail views, set their order,
+                mark fields mandatory, and preview each screen before you save.
+              </p>
+            </div>
+          </div>
+          <span className="text-sm font-medium text-amber">Open →</span>
+        </Link>
+      )}
 
       {can('settings', 'edit') && (
         <Link to="/settings/modules"
