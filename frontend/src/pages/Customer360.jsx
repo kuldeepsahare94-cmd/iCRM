@@ -3,11 +3,11 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, TrendingUp, Wallet, Repeat, LifeBuoy, FileText, Users as UsersIcon,
   AlertTriangle, Activity, Info, Phone, Mail, Calendar, StickyNote, CheckSquare, Paperclip,
-  Sparkles, Target, MessageCircle, Globe, Network, History, Plus,
+  Sparkles, Target, MessageCircle, Globe, Network, History, Plus, Trophy,
 } from 'lucide-react';
 import { api } from '../api';
 import {
-  KpiCard, Badge, Avatar, SkeletonCards, ErrorState, EmptyState, friendlyError,
+  Badge, Avatar, SkeletonCards, ErrorState, EmptyState, friendlyError,
 } from '../components/ui';
 
 const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
@@ -44,16 +44,68 @@ function ScoreRing({ score, band, label, tone }) {
   );
 }
 
+
+// Score ring sized and coloured for the gradient hero. The page's other
+// ring assumes a white background, so its greys disappear here.
+function HeroScore({ score, band, label }) {
+  const r = 22, c = 2 * Math.PI * r, pct = Math.max(0, Math.min(100, score || 0));
+  const colour = /excellent|healthy/i.test(band) ? '#6EE7B7'
+    : /needs attention/i.test(band) ? '#FDE68A' : '#FCA5A5';
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="relative" style={{ width: 52, height: 52 }}>
+        <svg width={52} height={52} className="-rotate-90">
+          <circle cx={26} cy={26} r={r} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth={5} />
+          <circle cx={26} cy={26} r={r} fill="none" stroke={colour} strokeWidth={5}
+            strokeDasharray={c} strokeDashoffset={c - (pct / 100) * c} strokeLinecap="round" />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center text-sm font-bold text-white">{score}</div>
+      </div>
+      <div className="leading-tight">
+        <div className="text-[10px] text-white/65 whitespace-nowrap">{label}</div>
+        <div className="text-xs font-semibold whitespace-nowrap" style={{ color: colour }}>{band}</div>
+      </div>
+    </div>
+  );
+}
+
+
+// Commercial tile with real weight: a gradient icon chip and a
+// colour-matched top accent, matching the dashboard KPIs. The shared
+// KpiCard renders a flat pale chip, which is what made this row read as
+// six grey boxes.
+function CommercialTile({ label, value, icon: Icon, from, to }) {
+  return (
+    <div className="relative bg-white border border-line rounded-2xl p-4 pt-5 overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all">
+      <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${from}, ${to})` }} />
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm mb-3"
+        style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}>
+        <Icon className="w-[18px] h-[18px]" />
+      </div>
+      <div className="text-[22px] font-bold text-ink leading-none">{value}</div>
+      <div className="text-xs text-slate-500 mt-1.5">{label}</div>
+    </div>
+  );
+}
+
 // The explainability table from the brief: component, weight, contribution,
 // and the concrete positives/negatives behind each one.
 function ScoreBreakdown({ scoring }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="card p-4">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <ScoreRing score={scoring.score} band={scoring.band} label="Account Score" tone={scoreTone(scoring.score)} />
-        <ScoreRing score={scoring.health.score} band={scoring.health.band} label="Customer Health" tone={scoreTone(scoring.health.score)} />
-        <button onClick={() => setOpen((o) => !o)} className="btn btn-secondary self-center">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+            style={{ background: '#6D28D91A', color: '#6D28D9' }}>
+            <Info className="w-4 h-4" />
+          </span>
+          <div>
+            <h2 className="t-section">How this score is calculated</h2>
+            <p className="t-meta">{scoring.score}/100 · {scoring.band} — weighted across {scoring.components?.length || 0} factors</p>
+          </div>
+        </div>
+        <button onClick={() => setOpen((o) => !o)} className="btn btn-secondary">
           <Info className="w-4 h-4" /> {open ? 'Hide' : 'Why this score?'}
         </button>
       </div>
@@ -103,12 +155,34 @@ function ScoreBreakdown({ scoring }) {
   );
 }
 
+const SECTION_TINTS = {
+  'Next best action': '#6D28D9',
+  'AI Customer Summary': '#7C3AED',
+  'Relationship map': '#0D9488',
+  Contacts: '#0D9488',
+  Opportunities: '#D97706',
+  Quotations: '#0891B2',
+  Subscriptions: '#059669',
+  Tickets: '#E11D48',
+  'Open tasks': '#4F46E5',
+  Documents: '#475569',
+  Notes: '#CA8A04',
+  'Audit history': '#64748B',
+  'Activity timeline': '#2563EB',
+};
+
 function Section({ title, icon: Icon, count, children, action }) {
+  const tint = SECTION_TINTS[title] || '#6D28D9';
   return (
     <div className="card p-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-line">
         <h2 className="t-section flex items-center gap-2">
-          {Icon && <Icon className="w-4 h-4 text-[var(--color-muted)]" />}
+          {Icon && (
+            <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+              style={{ background: `${tint}1A`, color: tint }}>
+              <Icon className="w-4 h-4" />
+            </span>
+          )}
           {title}
           {count !== undefined && <span className="t-meta">({count})</span>}
         </h2>
@@ -275,9 +349,15 @@ export default function Customer360() {
         <div aria-hidden="true" className="absolute inset-0 opacity-[0.09]" style={{
           backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '22px 22px',
         }} />
-        <div className="relative flex items-start justify-between flex-wrap gap-4">
+        {/* Depth: a soft light source top-left and a darker pool bottom-right
+            turn a flat colour block into a lit surface. */}
+        <div aria-hidden="true" className="absolute inset-0" style={{
+          background: 'radial-gradient(ellipse 700px 300px at 10% -10%, rgba(255,255,255,0.22), transparent 60%), radial-gradient(ellipse 600px 400px at 100% 120%, rgba(0,0,0,0.28), transparent 60%)',
+        }} />
+
+        <div className="relative flex items-start justify-between flex-wrap gap-6">
           <div className="flex items-start gap-4 min-w-0">
-            <div className="w-16 h-16 rounded-2xl bg-white/15 backdrop-blur border border-white/25 flex items-center justify-center text-white font-bold text-xl shrink-0">
+            <div className="w-16 h-16 rounded-2xl bg-white/15 backdrop-blur border border-white/25 flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-lg">
               {String(account.account_name || '?').split(' ').filter(Boolean).slice(0, 2).map((x) => x[0]).join('').toUpperCase()}
             </div>
             <div className="min-w-0">
@@ -286,11 +366,24 @@ export default function Customer360() {
               <p className="text-sm text-white/80 mt-1">
                 {[account.account_type, account.industry, account.city].filter(Boolean).join(' · ')}
               </p>
-              {contactsPrimary && (
-                <p className="text-xs text-white/70 mt-1.5">Primary contact · {contactsPrimary}</p>
-              )}
+              <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-white/75">
+                {contactsPrimary && <span>Primary contact · <span className="text-white font-medium">{contactsPrimary}</span></span>}
+                {account.phone && <span>{account.phone}</span>}
+                {account.email && <span className="truncate">{account.email}</span>}
+              </div>
             </div>
           </div>
+
+          {/* The two scores belong IN the hero — they are the reason this
+              page exists. Previously they sat in a separate white card with
+              a wide empty gap between the rings and the button. */}
+          {scoring && (
+            <div className="relative flex items-center gap-5 shrink-0 rounded-2xl px-5 py-3 bg-white/12 backdrop-blur border border-white/20">
+              <HeroScore score={scoring.score} band={scoring.band} label="Account Score" />
+              {scoring.health && <div className="w-px h-12 bg-white/20" />}
+              {scoring.health && <HeroScore score={scoring.health.score} band={scoring.health.band} label="Customer Health" />}
+            </div>
+          )}
 
           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
             {account.phone && (
@@ -327,17 +420,6 @@ export default function Customer360() {
       </div>
 
 
-      {(account.owner_id || contactsPrimary || account.phone || account.email) && (
-        <div className="card p-3 mb-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-          {contactsPrimary && (
-            <span className="t-meta">Primary contact <span className="text-ink font-medium">{contactsPrimary}</span></span>
-          )}
-          {account.phone && <span className="t-meta">Phone <span className="text-ink">{account.phone}</span></span>}
-          {account.email && <span className="t-meta">Email <span className="text-ink">{account.email}</span></span>}
-          {account.status && <span className="t-meta">Status <Badge status={account.status} size="xs">{account.status}</Badge></span>}
-        </div>
-      )}
-
       {attention.length > 0 && (
         <div className="card p-4 mb-4" style={{ borderColor: 'var(--color-warning)' }}>
           <h2 className="t-section flex items-center gap-2 mb-2">
@@ -359,13 +441,13 @@ export default function Customer360() {
       <div className="mb-4"><ScoreBreakdown scoring={scoring} /></div>
 
       <h2 className="t-section mb-3">Commercial snapshot</h2>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-        <KpiCard label="Won business" value={inr(commercial.won_value)} icon={TrendingUp} tone="success" />
-        <KpiCard label="Open pipeline" value={inr(commercial.open_pipeline)} icon={TrendingUp} tone="info" />
-        <KpiCard label="Weighted" value={inr(commercial.weighted_pipeline)} icon={TrendingUp} tone="special" />
-        <KpiCard label="MRR" value={inr(commercial.mrr)} icon={Repeat} tone="success" />
-        <KpiCard label="Collected" value={inr(commercial.paid_total)} icon={Wallet} tone="neutral" />
-        <KpiCard label="Open quotes" value={commercial.open_quotes} icon={FileText} tone="warning" />
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        <CommercialTile label="Won business" value={inr(commercial.won_value)} icon={Trophy} from="#6EE7B7" to="#047857" />
+        <CommercialTile label="Open pipeline" value={inr(commercial.open_pipeline)} icon={TrendingUp} from="#93C5FD" to="#1D4ED8" />
+        <CommercialTile label="Weighted" value={inr(commercial.weighted_pipeline)} icon={Target} from="#C4B5FD" to="#6D28D9" />
+        <CommercialTile label="MRR" value={inr(commercial.mrr)} icon={Repeat} from="#5EEAD4" to="#0F766E" />
+        <CommercialTile label="Collected" value={inr(commercial.paid_total)} icon={Wallet} from="#A3E635" to="#4D7C0F" />
+        <CommercialTile label="Open quotes" value={commercial.open_quotes} icon={FileText} from="#FCD34D" to="#B45309" />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4 mb-4">
