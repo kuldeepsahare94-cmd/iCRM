@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { relatedActivity } = require('../services/relatedActivity');
 const { requirePermission } = require('../middleware/auth');
 const { fireWorkflows } = require('../services/workflowAutomation');
 
@@ -24,7 +25,7 @@ router.get('/:id', requirePermission('contacts', 'view'), (req, res) => {
   const opportunities = db.prepare('SELECT * FROM opportunities WHERE primary_contact_id=? ORDER BY created_at DESC').all(req.params.id);
   const quotations = db.prepare('SELECT * FROM quotations WHERE contact_id=? ORDER BY quote_date DESC').all(req.params.id);
   const tickets = db.prepare('SELECT * FROM tickets WHERE contact_id=? ORDER BY created_at DESC').all(req.params.id);
-  res.json({ ...contact, opportunities, quotations, tickets });
+  res.json({ ...contact, opportunities, quotations, tickets, ...relatedActivity('contacts', req.params.id) });
 });
 
 router.post('/', requirePermission('contacts', 'create'), (req, res) => {

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { relatedActivity } = require('../services/relatedActivity');
 const { requirePermission } = require('../middleware/auth');
 const { fireEvent } = require('../services/whatsapp/workflowEngine');
 const { fireWorkflows } = require('../services/workflowAutomation');
@@ -97,7 +98,7 @@ router.get('/:id', requirePermission('quotations', 'view'), (req, res) => {
     SELECT qi.*, p.product_name FROM quotation_items qi LEFT JOIN products p ON p.id = qi.product_id
     WHERE qi.quotation_id=? ORDER BY qi.sort_order, qi.id
   `).all(req.params.id);
-  res.json({ ...quote, items });
+  res.json({ ...quote, items, ...relatedActivity('quotations', req.params.id) });
 });
 
 // Body: { ...header fields, items: [{ product_id, description, quantity, unit_price, discount_percent, tax_percent }] }

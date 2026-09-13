@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { relatedActivity } = require('../services/relatedActivity');
 const { requirePermission } = require('../middleware/auth');
 const { fireEvent } = require('../services/whatsapp/workflowEngine');
 const { fireWorkflows } = require('../services/workflowAutomation');
@@ -66,7 +67,7 @@ router.get('/:id', requirePermission('tickets', 'view'), (req, res) => {
   `).get(req.params.id);
   if (!ticket) return res.status(404).json({ error: 'Not found' });
   const replies = db.prepare('SELECT * FROM ticket_replies WHERE ticket_id=? ORDER BY created_at').all(req.params.id);
-  res.json({ ...ticket, replies });
+  res.json({ ...ticket, replies, ...relatedActivity('tickets', req.params.id) });
 });
 
 router.post('/', requirePermission('tickets', 'create'), (req, res) => {

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { relatedActivity } = require('../services/relatedActivity');
 const { requirePermission } = require('../middleware/auth');
 const { fireWorkflows } = require('../services/workflowAutomation');
 
@@ -44,7 +45,7 @@ router.get('/:id', requirePermission('subscriptions', 'view'), (req, res) => {
   `).get(req.params.id);
   if (!sub) return res.status(404).json({ error: 'Not found' });
   const payments = db.prepare('SELECT * FROM subscription_payments WHERE subscription_id=? ORDER BY payment_date DESC').all(req.params.id);
-  res.json({ ...sub, payments });
+  res.json({ ...sub, payments, ...relatedActivity('subscriptions', req.params.id) });
 });
 
 router.post('/', requirePermission('subscriptions', 'create'), (req, res) => {

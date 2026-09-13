@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { relatedActivity } = require('../services/relatedActivity');
 const { requirePermission } = require('../middleware/auth');
 const { fireEvent } = require('../services/whatsapp/workflowEngine');
 const { fireWorkflows } = require('../services/workflowAutomation');
@@ -122,7 +123,7 @@ router.get('/:id', requirePermission('opportunities', 'view'), (req, res) => {
     LEFT JOIN module_pipeline_stages ts ON ts.id = h.to_stage_id
     WHERE h.opportunity_id=? ORDER BY h.changed_at DESC
   `).all(req.params.id);
-  res.json({ ...opp, quotations, stageHistory });
+  res.json({ ...opp, quotations, stageHistory, ...relatedActivity('opportunities', req.params.id) });
 });
 
 router.post('/', requirePermission('opportunities', 'create'), (req, res) => {
