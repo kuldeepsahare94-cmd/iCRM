@@ -327,6 +327,7 @@ export const api = {
 
   // Customer 360 + scoring
   customer360: (accountId) => req('GET', `/c360/accounts/${accountId}`),
+  accountScore: (accountId) => req('GET', `/c360/accounts/${accountId}/score`),
   leadScore: (leadId) => req('GET', `/c360/leads/${leadId}/score`),
   // Email campaigns
   listCampaigns: () => req('GET', '/email-campaigns'),

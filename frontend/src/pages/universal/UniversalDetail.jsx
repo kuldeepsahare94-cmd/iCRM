@@ -116,6 +116,60 @@ function heroCounts(record) {
     .slice(0, 4);
 }
 
+
+// Each relation count gets its own colour, so the four boxes read as four
+// distinct things at a glance rather than one grey row. The glow is a
+// coloured shadow in the same hue, which lifts the box off the card
+// without needing a heavy border.
+const COUNT_STYLES = {
+  Contacts: { from: '#2DD4BF', to: '#0F766E', glow: 'rgba(13,148,136,0.35)' },
+  Deals: { from: '#FBBF24', to: '#B45309', glow: 'rgba(217,119,6,0.35)' },
+  Quotes: { from: '#22D3EE', to: '#0E7490', glow: 'rgba(8,145,178,0.35)' },
+  Tickets: { from: '#FB7185', to: '#BE123C', glow: 'rgba(225,29,72,0.35)' },
+  Subscriptions: { from: '#34D399', to: '#047857', glow: 'rgba(5,150,105,0.35)' },
+};
+
+function CountBox({ label, value, onClick }) {
+  const st = COUNT_STYLES[label] || COUNT_STYLES.Contacts;
+  return (
+    <button onClick={onClick}
+      className="rounded-xl px-3 py-2 text-center text-white transition-transform hover:-translate-y-0.5 shrink-0"
+      style={{ background: `linear-gradient(135deg, ${st.from}, ${st.to})`, boxShadow: `0 4px 14px ${st.glow}` }}>
+      <div className="text-lg font-bold leading-none">{value}</div>
+      <div className="text-[10px] opacity-90 mt-0.5">{label}</div>
+    </button>
+  );
+}
+
+// Compact score ring. Colour follows the band, not a fixed brand colour —
+// "At Risk" reading green would be actively misleading.
+const BAND_COLOUR = (band) => (
+  /excellent|healthy|good/i.test(band) ? 'var(--color-success)'
+    : /needs attention|fair|warm/i.test(band) ? 'var(--color-warning)'
+      : 'var(--color-danger)'
+);
+
+function MiniScoreRing({ score, band, label }) {
+  const r = 20, c = 2 * Math.PI * r, pct = Math.max(0, Math.min(100, score || 0));
+  const colour = BAND_COLOUR(band);
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      <div className="relative" style={{ width: 48, height: 48 }}>
+        <svg width={48} height={48} className="-rotate-90">
+          <circle cx={24} cy={24} r={r} fill="none" stroke="var(--color-line)" strokeWidth={5} />
+          <circle cx={24} cy={24} r={r} fill="none" stroke={colour} strokeWidth={5}
+            strokeDasharray={c} strokeDashoffset={c - (pct / 100) * c} strokeLinecap="round" />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-ink">{score}</div>
+      </div>
+      <div className="leading-tight">
+        <div className="text-[10px] text-slate-500">{label}</div>
+        <div className="text-xs font-semibold" style={{ color: colour }}>{band}</div>
+      </div>
+    </div>
+  );
+}
+
 function DetailRow({ label, value }) {
   const empty = value === null || value === undefined || value === '';
   return (
@@ -562,6 +616,7 @@ export default function UniversalDetail() {
   const [tab, setTab] = useState('overview');
   const [addingRelation, setAddingRelation] = useState(null);
   const [waOpen, setWaOpen] = useState(false);
+  const [acctScore, setAcctScore] = useState(null);
   const [disposing, setDisposing] = useState(false);
   const [layout, setLayout] = useState(null); // null until loaded; { sections: [] } means "no custom layout saved"
 
@@ -597,6 +652,14 @@ export default function UniversalDetail() {
 
   // Auto-detected related-record tabs: any top-level array-of-objects on the
   // record that isn't the field list itself.
+  // Accounts get score + health rings in the header. Fetched from the
+  // lightweight score endpoint rather than the full Customer 360 payload,
+  // which would pull 15 sections of relations to render two small rings.
+  useEffect(() => {
+    if (module?.api_name !== 'accounts' || !id) { setAcctScore(null); return; }
+    api.accountScore(id).then(setAcctScore).catch(() => setAcctScore(null));
+  }, [module?.api_name, id]);
+
   const embeddedRelations = useMemo(() => {
     if (!record) return [];
     return Object.entries(record)
@@ -755,18 +818,23 @@ export default function UniversalDetail() {
             const counts = heroCounts(record);
             if (counts.length === 0) return null;
             return (
-              <div className="flex items-center gap-4 pr-4 border-r border-line">
+              <div className="flex items-center gap-2 pr-3">
                 {counts.map((c) => (
-                  <button key={c.label}
-                    onClick={() => setTab(c.label === 'Deals' ? 'opportunities' : c.label.toLowerCase())}
-                    className="text-center hover:opacity-70 transition-opacity">
-                    <div className="text-lg font-bold text-ink leading-none">{c.value}</div>
-                    <div className="text-[11px] text-slate-500 mt-0.5">{c.label}</div>
-                  </button>
+                  <CountBox key={c.label} label={c.label} value={c.value}
+                    onClick={() => setTab(c.label === 'Deals' ? 'opportunities' : c.label.toLowerCase())} />
                 ))}
               </div>
             );
           })()}
+
+          {acctScore && (
+            <div className="flex items-center gap-4 pr-3 border-r border-line">
+              <MiniScoreRing score={acctScore.score} band={acctScore.band} label="Account Score" />
+              {acctScore.health && (
+                <MiniScoreRing score={acctScore.health.score} band={acctScore.health.band} label="Customer Health" />
+              )}
+            </div>
+          )}
 
           {can(module.api_name, 'edit') && !editing && (
             <button onClick={startEdit} className="border border-line text-sm font-medium px-4 py-2 rounded-lg hover:bg-white inline-flex items-center gap-2">

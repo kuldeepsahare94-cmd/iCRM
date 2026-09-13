@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Building2, TrendingUp, Wallet, Repeat, LifeBuoy, FileText, Users as UsersIcon,
+  ArrowLeft, TrendingUp, Wallet, Repeat, LifeBuoy, FileText, Users as UsersIcon,
   AlertTriangle, Activity, Info, Phone, Mail, Calendar, StickyNote, CheckSquare, Paperclip,
-  Sparkles, Target, MessageCircle, Globe, Pencil, Network, History, Plus,
+  Sparkles, Target, MessageCircle, Globe, Network, History, Plus,
 } from 'lucide-react';
 import { api } from '../api';
 import {
-  PageHeader, KpiCard, Badge, Avatar, SkeletonCards, ErrorState, EmptyState, friendlyError,
+  KpiCard, Badge, Avatar, SkeletonCards, ErrorState, EmptyState, friendlyError,
 } from '../components/ui';
 
 const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
@@ -245,28 +245,87 @@ export default function Customer360() {
   const primary = contacts[0];
   const contactsPrimary = primary ? `${primary.first_name} ${primary.last_name || ''}`.trim() : null;
 
+  const C360 = { from: '#6366F1', to: '#7C3AED', solid: '#6D28D9' };
+
   return (
-    <div className="max-w-[1600px] mx-auto">
+    <div className="relative max-w-[1600px] mx-auto rounded-3xl -m-4 sm:-m-6 p-4 sm:p-6">
+      <div aria-hidden="true" className="absolute inset-0 z-0 overflow-hidden rounded-3xl pointer-events-none">
+        <div className="absolute inset-0" style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, ${C360.solid}33 1px, transparent 0)`,
+          backgroundSize: '22px 22px',
+        }} />
+        <div className="absolute -top-32 -right-28 w-[560px] h-[560px] rounded-full" style={{
+          background: `radial-gradient(circle, ${C360.solid}42, transparent 70%)`,
+        }} />
+        <div className="absolute -bottom-40 -left-28 w-[500px] h-[500px] rounded-full" style={{
+          background: `radial-gradient(circle, ${C360.from}38, transparent 70%)`,
+        }} />
+      </div>
+
+      <div className="relative z-10">
       <button onClick={() => navigate('/records/accounts')} className="btn btn-ghost mb-3 -ml-2">
         <ArrowLeft className="w-4 h-4" /> Accounts
       </button>
 
-      <PageHeader title={account.account_name}
-        subtitle={[account.account_type, account.industry, account.city].filter(Boolean).join(' · ') || 'Customer 360'}>
-        {account.phone && <a href={`tel:${account.phone}`} className="btn btn-secondary"><Phone className="w-4 h-4" /> Call</a>}
-        {account.email && <a href={`mailto:${account.email}`} className="btn btn-secondary"><Mail className="w-4 h-4" /> Email</a>}
-        {(account.whatsapp || account.phone) && (
-          <a href={`https://wa.me/${String(account.whatsapp || account.phone).replace(/\D/g, '')}`}
-            target="_blank" rel="noreferrer" className="btn btn-secondary">
-            <MessageCircle className="w-4 h-4" /> WhatsApp
-          </a>
-        )}
-        {account.website && (
-          <a href={/^https?:/.test(account.website) ? account.website : `https://${account.website}`}
-            target="_blank" rel="noreferrer" className="btn btn-secondary"><Globe className="w-4 h-4" /> Website</a>
-        )}
-        <Link to={`/records/accounts/${id}`} className="btn btn-primary"><Pencil className="w-4 h-4" /> Open record</Link>
-      </PageHeader>
+      {/* Gradient hero — the one place in the product that uses a solid
+          colour block, marking Customer 360 as a distinct surface from the
+          white record pages. */}
+      <div className="rounded-2xl p-6 mb-4 relative overflow-hidden"
+        style={{ background: `linear-gradient(135deg, ${C360.from}, ${C360.to})` }}>
+        <div aria-hidden="true" className="absolute inset-0 opacity-[0.09]" style={{
+          backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '22px 22px',
+        }} />
+        <div className="relative flex items-start justify-between flex-wrap gap-4">
+          <div className="flex items-start gap-4 min-w-0">
+            <div className="w-16 h-16 rounded-2xl bg-white/15 backdrop-blur border border-white/25 flex items-center justify-center text-white font-bold text-xl shrink-0">
+              {String(account.account_name || '?').split(' ').filter(Boolean).slice(0, 2).map((x) => x[0]).join('').toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold text-white/70 uppercase tracking-wider mb-1">Customer 360</div>
+              <h1 className="text-2xl font-bold text-white leading-tight">{account.account_name}</h1>
+              <p className="text-sm text-white/80 mt-1">
+                {[account.account_type, account.industry, account.city].filter(Boolean).join(' · ')}
+              </p>
+              {contactsPrimary && (
+                <p className="text-xs text-white/70 mt-1.5">Primary contact · {contactsPrimary}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            {account.phone && (
+              <a href={`tel:${account.phone}`} className="bg-white/15 hover:bg-white/25 border border-white/25 text-white text-sm font-medium px-3 py-2 rounded-xl inline-flex items-center gap-1.5">
+                <Phone className="w-4 h-4" /> Call
+              </a>
+            )}
+            {account.email && (
+              <a href={`mailto:${account.email}`} className="bg-white/15 hover:bg-white/25 border border-white/25 text-white text-sm font-medium px-3 py-2 rounded-xl inline-flex items-center gap-1.5">
+                <Mail className="w-4 h-4" /> Email
+              </a>
+            )}
+            {(account.whatsapp || account.phone) && (
+              <a href={`https://wa.me/${String(account.whatsapp || account.phone).replace(/\D/g, '')}`}
+                target="_blank" rel="noreferrer"
+                className="bg-white/15 hover:bg-white/25 border border-white/25 text-white text-sm font-medium px-3 py-2 rounded-xl inline-flex items-center gap-1.5">
+                <MessageCircle className="w-4 h-4" /> WhatsApp
+              </a>
+            )}
+            {account.website && (
+              <a href={/^https?:/.test(account.website) ? account.website : `https://${account.website}`}
+                target="_blank" rel="noreferrer"
+                className="bg-white/15 hover:bg-white/25 border border-white/25 text-white text-sm font-medium px-3 py-2 rounded-xl inline-flex items-center gap-1.5">
+                <Globe className="w-4 h-4" /> Website
+              </a>
+            )}
+            <Link to={`/records/accounts/${account.id}`}
+              className="bg-white text-sm font-semibold px-4 py-2 rounded-xl inline-flex items-center gap-1.5"
+              style={{ color: C360.to }}>
+              Open record
+            </Link>
+          </div>
+        </div>
+      </div>
+
 
       {(account.owner_id || contactsPrimary || account.phone || account.email) && (
         <div className="card p-3 mb-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
@@ -542,6 +601,7 @@ export default function Customer360() {
             </div>
           )}
         </Section>
+      </div>
       </div>
     </div>
   );
