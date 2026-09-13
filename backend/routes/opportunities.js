@@ -92,10 +92,26 @@ router.get('/kanban', requirePermission('opportunities', 'view'), (req, res) => 
 });
 
 router.get('/:id', requirePermission('opportunities', 'view'), (req, res) => {
+  // An opportunity has no phone or email of its own — the people you
+  // actually call live on the linked account and contact. The detail
+  // endpoint returned only `account_name`, so the record gave you a deal
+  // to work and no way to reach anyone about it without navigating away.
+  // Pulled in here so the header can offer call/email/WhatsApp directly.
   const opp = db.prepare(`
-    SELECT o.*, a.account_name, s.name AS stage_name FROM opportunities o
+    SELECT o.*,
+      a.account_name, a.phone AS account_phone, a.email AS account_email,
+      a.city AS account_city, a.industry AS account_industry,
+      c.first_name AS contact_first_name, c.last_name AS contact_last_name,
+      c.job_title AS contact_job_title,
+      COALESCE(c.mobile, c.phone) AS contact_phone, c.email AS contact_email,
+      s.name AS stage_name, s.color AS stage_color,
+      COALESCE(s.is_won, 0) AS stage_is_won, COALESCE(s.is_lost, 0) AS stage_is_lost,
+      COALESCE(u.full_name, u.username) AS owner_name
+    FROM opportunities o
     LEFT JOIN accounts a ON a.id = o.account_id
+    LEFT JOIN contacts c ON c.id = o.primary_contact_id
     LEFT JOIN module_pipeline_stages s ON s.id = o.stage_id
+    LEFT JOIN users u ON u.id = o.owner_id
     WHERE o.id=?
   `).get(req.params.id);
   if (!opp) return res.status(404).json({ error: 'Not found' });
