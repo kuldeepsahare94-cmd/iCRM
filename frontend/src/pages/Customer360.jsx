@@ -82,8 +82,25 @@ function CommercialTile({ label, value, icon: Icon, from, to }) {
         style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}>
         <Icon className="w-[18px] h-[18px]" />
       </div>
-      <div className="text-[22px] font-bold text-ink leading-none">{value}</div>
-      <div className="text-xs text-slate-500 mt-1.5">{label}</div>
+      <div className="text-[22px] font-bold text-ink leading-none tabular-nums tracking-tight">{value}</div>
+      <div className="text-[11px] text-slate-500 mt-2 uppercase tracking-wide font-medium">{label}</div>
+    </div>
+  );
+}
+
+
+// Empty state for a section. Compact by design: an empty section should
+// occupy the space its emptiness deserves, not the same height as a full
+// one. The tinted disc ties it to the section's own colour so the page
+// keeps its rhythm instead of going grey wherever there's no data.
+function SectionEmpty({ icon: Icon, text, tint = '#6D28D9' }) {
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+        style={{ background: `${tint}12`, color: tint }}>
+        {Icon ? <Icon className="w-4 h-4" /> : null}
+      </span>
+      <span className="text-sm text-slate-400">{text}</span>
     </div>
   );
 }
@@ -171,10 +188,18 @@ const SECTION_TINTS = {
   'Activity timeline': '#2563EB',
 };
 
+const PRIMARY_SECTIONS = new Set(['Next best action', 'AI Customer Summary']);
+
 function Section({ title, icon: Icon, count, children, action }) {
   const tint = SECTION_TINTS[title] || '#6D28D9';
+  const primary = PRIMARY_SECTIONS.has(title);
   return (
-    <div className="card p-4">
+    <div className="card p-4 relative overflow-hidden transition-shadow hover:shadow-md"
+      style={primary ? { boxShadow: '0 8px 28px rgba(109,40,217,0.10)' } : undefined}>
+      {primary && (
+        <div aria-hidden="true" className="absolute top-0 left-0 right-0 h-[3px]"
+          style={{ background: `linear-gradient(90deg, ${tint}, #A78BFA)` }} />
+      )}
       <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-line">
         <h2 className="t-section flex items-center gap-2">
           {Icon && (
@@ -219,11 +244,18 @@ function AiSummaryPanel({ accountId }) {
                      'What should I do next?', 'Which opportunities are at risk?'];
 
   return (
-    <div className="card p-4">
-      <h2 className="t-section flex items-center gap-2 mb-1">
-        <Sparkles className="w-4 h-4" style={{ color: 'var(--color-special)' }} /> AI Customer Summary
+    <div className="card p-4 relative overflow-hidden transition-shadow hover:shadow-md"
+      style={{ boxShadow: '0 8px 28px rgba(109,40,217,0.10)' }}>
+      <div aria-hidden="true" className="absolute top-0 left-0 right-0 h-[3px]"
+        style={{ background: 'linear-gradient(90deg, #7C3AED, #A78BFA)' }} />
+      <h2 className="t-section flex items-center gap-2">
+        <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: '#7C3AED1A', color: '#7C3AED' }}>
+          <Sparkles className="w-4 h-4" />
+        </span>
+        AI Customer Summary
       </h2>
-      <p className="t-meta mb-3">Grounded in this account's own records.</p>
+      <p className="t-meta mb-3 mt-1.5 pb-2.5 border-b border-line">Grounded in this account's own records.</p>
 
       <div className="flex flex-wrap gap-1.5 mb-3">
         {SUGGESTED.map((q) => (
@@ -421,26 +453,35 @@ export default function Customer360() {
 
 
       {attention.length > 0 && (
-        <div className="card p-4 mb-4" style={{ borderColor: 'var(--color-warning)' }}>
-          <h2 className="t-section flex items-center gap-2 mb-2">
-            <AlertTriangle className="w-4 h-4" style={{ color: 'var(--color-warning)' }} /> Attention required
-          </h2>
-          <ul className="space-y-1">
-            {attention.map((a, i) => (
-              <li key={i} className="flex items-center gap-2 text-sm">
-                <Badge tone={a.severity === 'high' ? 'danger' : a.severity === 'medium' ? 'warning' : 'neutral'} size="xs">
-                  {a.severity}
-                </Badge>
-                <span className="text-ink">{a.text}</span>
-              </li>
-            ))}
-          </ul>
+        <div className="rounded-2xl p-4 mb-4 relative overflow-hidden border border-line"
+          style={{ background: 'linear-gradient(100deg, #FFFBEB, #FFFFFF 55%)', boxShadow: '0 6px 20px rgba(217,119,6,0.10)' }}>
+          <div aria-hidden="true" className="absolute inset-y-0 left-0 w-1"
+            style={{ background: 'linear-gradient(180deg, #FBBF24, #D97706)' }} />
+          <div className="flex items-start gap-3 pl-2">
+            <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-white shadow-sm"
+              style={{ background: 'linear-gradient(135deg, #FBBF24, #D97706)' }}>
+              <AlertTriangle className="w-4 h-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="t-section">Attention required</h2>
+              <ul className="mt-2 space-y-1.5">
+                {attention.map((a, i) => (
+                  <li key={i} className="flex items-center gap-2 text-sm">
+                    <Badge tone={a.severity === 'high' ? 'danger' : a.severity === 'medium' ? 'warning' : 'neutral'} size="xs">
+                      {a.severity}
+                    </Badge>
+                    <span className="text-ink">{a.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         </div>
       )}
 
       <div className="mb-4"><ScoreBreakdown scoring={scoring} /></div>
 
-      <h2 className="t-section mb-3">Commercial snapshot</h2>
+      <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">Commercial snapshot</h2>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         <CommercialTile label="Won business" value={inr(commercial.won_value)} icon={Trophy} from="#6EE7B7" to="#047857" />
         <CommercialTile label="Open pipeline" value={inr(commercial.open_pipeline)} icon={TrendingUp} from="#93C5FD" to="#1D4ED8" />
@@ -450,7 +491,7 @@ export default function Customer360() {
         <CommercialTile label="Open quotes" value={commercial.open_quotes} icon={FileText} from="#FCD34D" to="#B45309" />
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-4 mb-4">
+      <div className="grid lg:grid-cols-2 gap-4 mb-4 items-start">
         <Section title="Next best action" icon={Target}>
           {nextBest.length === 0 ? (
             <p className="t-meta">Nothing needs attention right now.</p>
@@ -503,7 +544,7 @@ export default function Customer360() {
         </div>
       )}
 
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className="grid lg:grid-cols-2 gap-4 items-start">
         <Section title="Contacts" icon={UsersIcon} count={contacts.length}>
           {contacts.length === 0 ? <p className="t-meta">No contacts yet.</p> : (
             <div className="space-y-2">
@@ -560,7 +601,7 @@ export default function Customer360() {
         </Section>
 
         <Section title="Subscriptions" icon={Repeat} count={subscriptions.length}>
-          {subscriptions.length === 0 ? <p className="t-meta">No subscriptions.</p> : (
+          {subscriptions.length === 0 ? <SectionEmpty icon={Repeat} tint="#059669" text="No active subscriptions." /> : (
             <div className="space-y-2">
               {subscriptions.map((s) => (
                 <Link key={s.id} to={`/records/subscriptions/${s.id}`}
@@ -600,7 +641,7 @@ export default function Customer360() {
         </Section>
 
         <Section title="Open tasks" icon={CheckSquare} count={tasks.length}>
-          {tasks.length === 0 ? <p className="t-meta">Nothing outstanding.</p> : (
+          {tasks.length === 0 ? <SectionEmpty icon={CheckSquare} tint="#4F46E5" text="Nothing outstanding." /> : (
             <div className="space-y-2">
               {tasks.map((t) => (
                 <div key={t.id} className="flex items-center justify-between gap-3 p-2 -mx-2">
@@ -616,7 +657,7 @@ export default function Customer360() {
         </Section>
 
         <Section title="Documents" icon={Paperclip} count={documents.length}>
-          {documents.length === 0 ? <p className="t-meta">Nothing attached.</p> : (
+          {documents.length === 0 ? <SectionEmpty icon={Paperclip} tint="#475569" text="No documents attached." /> : (
             <div className="space-y-2">
               {documents.map((d) => (
                 <div key={d.id} className="flex items-center justify-between gap-3 p-2 -mx-2">
@@ -636,7 +677,7 @@ export default function Customer360() {
         </Section>
 
         <Section title="Audit history" icon={History} count={audit.length}>
-          {audit.length === 0 ? <p className="t-meta">No changes recorded yet.</p> : (
+          {audit.length === 0 ? <SectionEmpty icon={History} tint="#64748B" text="No changes recorded yet." /> : (
             <div className="space-y-2 max-h-[300px] overflow-y-auto thin-scroll">
               {audit.map((a, i) => (
                 <div key={i} className="text-sm">
