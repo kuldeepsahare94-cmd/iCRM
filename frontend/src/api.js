@@ -152,19 +152,25 @@ export const api = {
   dashboardCrm: () => req('GET', '/dashboard/crm'),
 
   // reports
-  reportLeads: (params) => req('GET', '/reports/leads' + qs(params)),
-  reportStudents: (params) => req('GET', '/reports/students' + qs(params)),
-  reportAdmissions: (params) => req('GET', '/reports/admissions' + qs(params)),
-  reportCourseWiseAdmissions: () => req('GET', '/reports/course-wise-admissions'),
-  reportFeeCollection: (params) => req('GET', '/reports/fee-collection' + qs(params)),
-  reportPendingFees: () => req('GET', '/reports/pending-fees'),
-  reportPayments: (params) => req('GET', '/reports/payments' + qs(params)),
-  reportPlacements: (params) => req('GET', '/reports/placements' + qs(params)),
-  reportInterviews: (params) => req('GET', '/reports/interviews' + qs(params)),
-  reportCompanies: () => req('GET', '/reports/companies'),
-  reportRevenue: (params) => req('GET', '/reports/revenue' + qs(params)),
-  reportMonthlyAdmissions: () => req('GET', '/reports/monthly-admissions'),
-  reportMonthlyCollection: () => req('GET', '/reports/monthly-collection'),
+  //
+  // The per-report endpoints that used to live here (students, admissions,
+  // course-wise admissions, fee collection, placements, interviews) went with
+  // the education modules they reported on. Reports are now driven by a
+  // catalogue the backend publishes, so adding a report needs no change here.
+  reportCatalogue: () => req('GET', '/reports/catalogue'),
+  runReport: (key, params) => req('GET', `/reports/run/${key}` + qs(params)),
+
+  // report builder
+  reportBuilderModules: () => req('GET', '/reports/builder/modules'),
+  reportFieldValues: (module, field) => req('GET', '/reports/builder/values' + qs({ module, field })),
+  runCustomReport: (config) => req('POST', '/reports/custom/run', config),
+
+  // saved reports
+  listSavedReports: () => req('GET', '/reports/saved'),
+  createSavedReport: (body) => req('POST', '/reports/saved', body),
+  runSavedReport: (id, params) => req('GET', `/reports/saved/${id}/run` + qs(params)),
+  updateSavedReport: (id, body) => req('PUT', `/reports/saved/${id}`, body),
+  deleteSavedReport: (id) => req('DELETE', `/reports/saved/${id}`),
 
   // notifications
   listNotifications: () => req('GET', '/notifications'),

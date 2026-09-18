@@ -67,7 +67,24 @@ function createActivityRouter(config) {
     res.json(db.prepare(`SELECT * FROM ${tableName} WHERE id=?`).get(req.params.id));
   });
 
-  router.delete('/:id', requirePermission(moduleApiName, 'delete'), (req, res) => {
+  router.delete('/:id', requirePermission(moduleApiName, 'delete'), async (req, res) => {
+    // `beforeDelete` lets a module clean up things that live outside its own
+    // table. Meetings use it to remove the matching event from connected
+    // Google and Outlook calendars — without it, deleting a meeting from a
+    // record page would leave a ghost event in everyone's calendar forever,
+    // with no way to get rid of it from the CRM.
+    //
+    // It runs BEFORE the row is deleted, because the link between a meeting
+    // and its external event is keyed on the meeting. It never blocks the
+    // delete: if the provider cannot be reached, the CRM still removes its own
+    // record and the failure is logged rather than shown as a delete error.
+    if (typeof config.beforeDelete === 'function') {
+      try {
+        await config.beforeDelete(Number(req.params.id), req);
+      } catch (err) {
+        console.warn(`[${moduleApiName}] beforeDelete hook failed for ${req.params.id}: ${err.message}`);
+      }
+    }
     db.prepare(`DELETE FROM ${tableName} WHERE id=?`).run(req.params.id);
     res.status(204).end();
   });

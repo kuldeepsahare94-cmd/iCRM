@@ -25,6 +25,7 @@ require('./db-phase33-wa-quick-templates');
 require('./db-phase34-lead-company');
 require('./db-phase35-chat');
 require('./db-phase36-reports');
+require('./db-phase37-calendar');
 
 const app = express();
 
@@ -70,6 +71,17 @@ app.use('/api/dashboard', requireAuth, require('./routes/dashboard'));
 app.use('/api/reports', requireAuth, require('./routes/reports'));
 app.use('/api/notifications', requireAuth, require('./routes/notifications'));
 app.use('/api/chat', requireAuth, require('./routes/chat'));
+
+// Calendar is mounted with one exception to the login requirement: the OAuth
+// callback. Google and Microsoft redirect the user's BROWSER to it, and a
+// browser redirect carries no Authorization header, so requiring a token here
+// would make it impossible to ever complete a connection. The callback is not
+// unprotected — it authenticates the signed `state` parameter it was issued
+// with (see routes/calendar.js), which also prevents anyone from attaching
+// their calendar account to someone else's CRM user.
+app.use('/api/calendar', (req, res, next) => (
+  req.path.startsWith('/callback/') ? next() : requireAuth(req, res, next)
+), require('./routes/calendar'));
 app.use('/api/roles', requireAuth, require('./routes/roles'));
 app.use('/api/users', requireAuth, require('./routes/users'));
 app.use('/api/settings', requireAuth, require('./routes/settings'));
