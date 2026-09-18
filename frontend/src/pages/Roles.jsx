@@ -12,7 +12,7 @@ import { PageHeader } from '../components/ui';
 // initially missed.
 const MODULES = ['leads', 'accounts', 'contacts', 'opportunities', 'quotations', 'products',
   'subscriptions', 'tickets', 'calls', 'meetings', 'tasks', 'notes', 'emails', 'payments',
-  'documents', 'teams', 'workflows', 'reports', 'users', 'chat', 'settings'];
+  'documents', 'teams', 'workflows', 'reports', 'users', 'chat', 'calendar', 'settings'];
 const ACTIONS = ['view', 'create', 'edit', 'delete', 'export'];
 const ACTION_KEYS = { view: 'can_view', create: 'can_create', edit: 'can_edit', delete: 'can_delete', export: 'can_export' };
 
