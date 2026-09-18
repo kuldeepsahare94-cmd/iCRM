@@ -386,6 +386,20 @@ export default function ChatWidget() {
     setToasts((x) => x.filter((y) => y.id !== t.id));
   };
 
+  // Hiding the icon is right when someone genuinely lacks the permission, but
+  // it also makes "the backend hasn't been redeployed" look identical to
+  // "the feature doesn't exist". Say which, once, in the console.
+  useEffect(() => {
+    if (user && !canChat) {
+      const hasChatKey = user.permissions && 'chat' in user.permissions;
+      console.info(
+        hasChatKey
+          ? '[chat] Hidden: your role does not have chat view permission (Roles & Permissions -> chat).'
+          : '[chat] Hidden: this backend has no chat permission yet — it has not been redeployed with the chat migration.',
+      );
+    }
+  }, [user, canChat]);
+
   if (!canChat) return null;
 
   const filteredUsers = users.filter((u) =>

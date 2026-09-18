@@ -6,9 +6,13 @@ import { PageHeader } from '../components/ui';
 // Modules that actually exist in this CRM. The education-era entries
 // (students/courses/admissions/companies/placements) were removed, so
 // listing them here only produced permission rows nothing could use.
+// This list is hand-maintained, so a new permission surface has to be added
+// here too — otherwise the permission exists in the database but there is no
+// row in this matrix to switch it on or off, which is how `chat` was
+// initially missed.
 const MODULES = ['leads', 'accounts', 'contacts', 'opportunities', 'quotations', 'products',
   'subscriptions', 'tickets', 'calls', 'meetings', 'tasks', 'notes', 'emails', 'payments',
-  'documents', 'teams', 'workflows', 'reports', 'users', 'settings'];
+  'documents', 'teams', 'workflows', 'reports', 'users', 'chat', 'settings'];
 const ACTIONS = ['view', 'create', 'edit', 'delete', 'export'];
 const ACTION_KEYS = { view: 'can_view', create: 'can_create', edit: 'can_edit', delete: 'can_delete', export: 'can_export' };
 
