@@ -263,6 +263,25 @@ function hydrate(m, conversationId, userId) {
     created_at: m.created_at,
     edited_at: m.edited_at,
     reply_to_id: m.reply_to_id,
+    // The quoted message, so the bubble can show what is being replied to
+    // without the client fetching each one separately. Trimmed to a preview:
+    // the full original is already in the thread.
+    reply_to: m.reply_to_id ? (() => {
+      const r = db.prepare(`
+        SELECT m2.id, m2.body, m2.deleted_at, m2.sender_id, u.full_name, u.username,
+               (SELECT COUNT(*) FROM chat_attachments a WHERE a.message_id = m2.id) AS attachment_count
+        FROM chat_messages m2 JOIN users u ON u.id = m2.sender_id WHERE m2.id = ?
+      `).get(m.reply_to_id);
+      if (!r) return null;                       // original hard-deleted
+      return {
+        id: r.id,
+        sender_name: r.full_name || r.username,
+        mine: r.sender_id === userId,
+        body: r.deleted_at
+          ? 'Message deleted'
+          : (r.body ? r.body.slice(0, 140) : (r.attachment_count ? 'Attachment' : '')),
+      };
+    })() : null,
     mine: m.sender_id === userId,
     attachments: m.deleted_at ? [] : attachmentsFor.all(m.id),
     ref: m.ref_module ? { module: m.ref_module, record_id: m.ref_record_id, label: m.ref_label } : null,
