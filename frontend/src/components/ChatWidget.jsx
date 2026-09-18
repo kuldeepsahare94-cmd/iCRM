@@ -71,23 +71,75 @@ function Avatar({ name, online, size = 36 }) {
 
 function Attachment({ att }) {
   const isImage = String(att.mime_type || '').startsWith('image/') && att.mime_type !== 'image/svg+xml';
-  const url = api.chatAttachmentUrl(att.id);
+  const [src, setSrc] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Images have to be fetched with the auth header and shown from a blob URL
+  // — a plain <img src> sends no Authorization header, so it would just 401.
+  useEffect(() => {
+    if (!isImage) return undefined;
+    let revoked = false;
+    let objectUrl = null;
+    api.chatAttachmentBlob(att.id)
+      .then((r) => { if (!revoked) { objectUrl = r.url; setSrc(r.url); } })
+      .catch((e) => !revoked && setError(e.message));
+    return () => {
+      revoked = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);   // don't leak blobs
+    };
+  }, [att.id, isImage]);
+
+  // Documents open on click, for the same reason: fetch with the header, then
+  // hand the browser a blob.
+  const open = async () => {
+    setBusy(true); setError('');
+    try {
+      const { url, filename } = await api.chatAttachmentBlob(att.id);
+      const a = document.createElement('a');
+      a.href = url;
+      // PDFs and images are worth previewing; anything else downloads.
+      if (/pdf$/i.test(att.mime_type || '')) a.target = '_blank';
+      else a.download = filename || att.file_name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (isImage) {
     return (
-      <a href={url} target="_blank" rel="noreferrer" className="block mt-1.5">
-        <img src={url} alt={att.file_name} className="rounded-lg max-h-56 border border-line" />
-      </a>
+      <div className="mt-1.5">
+        {src
+          ? <button type="button" onClick={open} className="block">
+              <img src={src} alt={att.file_name} className="rounded-lg max-h-56 border border-line" />
+            </button>
+          : <div className="rounded-lg border border-line bg-white/60 px-3 py-6 text-xs text-[var(--color-muted)] text-center">
+              {error || 'Loading image…'}
+            </div>}
+      </div>
     );
   }
+
   return (
-    <a href={url} target="_blank" rel="noreferrer"
-      className="flex items-center gap-2 mt-1.5 bg-white/70 border border-line rounded-lg px-2.5 py-2 hover:bg-white">
-      <FileText className="w-4 h-4 shrink-0 text-[var(--color-muted)]" />
-      <span className="min-w-0">
-        <span className="block text-xs font-medium text-ink truncate">{att.file_name}</span>
-        <span className="block text-[11px] text-[var(--color-muted)]">{bytes(att.size_bytes)}</span>
-      </span>
-    </a>
+    <>
+      <button type="button" onClick={open} disabled={busy}
+        className="w-full flex items-center gap-2 mt-1.5 bg-white/70 border border-line rounded-lg px-2.5 py-2 hover:bg-white text-left disabled:opacity-60">
+        <FileText className="w-4 h-4 shrink-0 text-[var(--color-muted)]" />
+        <span className="min-w-0">
+          <span className="block text-xs font-medium text-ink truncate">{att.file_name}</span>
+          <span className="block text-[11px] text-[var(--color-muted)]">
+            {busy ? 'Opening…' : bytes(att.size_bytes)}
+          </span>
+        </span>
+      </button>
+      {error && <p className="text-[11px] text-warn mt-1">{error}</p>}
+    </>
   );
 }
 
@@ -345,6 +397,15 @@ export default function ChatWidget() {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length]);
 
+  // Escape closes the panel — the usual way out now that clicking the page
+  // no longer dismisses it (the page is deliberately still interactive).
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
   // -------------------------------------------------------------- actions
   const openWith = async (u) => {
     try {
@@ -444,10 +505,20 @@ export default function ChatWidget() {
 
       {open && createPortal((
         <>
-          <div className="fixed inset-0 z-[75] bg-black/20" onClick={() => setOpen(false)} />
-          <aside className="fixed right-0 top-0 bottom-0 z-[76] w-full sm:w-[760px] bg-white shadow-2xl flex flex-col sm:flex-row overflow-hidden">
+          {/* No dimming backdrop and no full-screen click-catcher: the point
+              of a team chat is to keep it open WHILE working, and a 760px
+              panel over a dimmed page blocked most of a laptop screen. The
+              CRM stays fully usable behind this. Close with the X, the header
+              icon, or Escape. */}
+          <aside
+            role="dialog"
+            aria-label="Team chat"
+            className="fixed right-0 bottom-0 z-[76] bg-white shadow-2xl border-l border-t border-line
+                       flex flex-col sm:flex-row overflow-hidden
+                       w-full sm:w-[min(620px,calc(100vw-2rem))]
+                       top-0 sm:top-16 sm:rounded-tl-2xl">
             {/* ---------------- left: people and conversations ---------------- */}
-            <div className={`${activeId ? 'hidden sm:flex' : 'flex'} flex-col w-full sm:w-[290px] border-r border-line min-h-0 relative`}>
+            <div className={`${activeId ? 'hidden sm:flex' : 'flex'} flex-col w-full sm:w-[240px] border-r border-line min-h-0 relative`}>
               <div className="flex items-center justify-between px-4 py-3 border-b border-line">
                 <h2 className="text-sm font-semibold text-ink">Team Chat</h2>
                 <div className="flex items-center gap-1">

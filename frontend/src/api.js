@@ -481,7 +481,30 @@ export const api = {
     'GET',
     `/chat/poll?since=${since || 0}${conversationId ? `&conversation_id=${conversationId}` : ''}`,
   ),
-  chatAttachmentUrl: (id) => `${BASE}/chat/attachments/${id}`,
+  // NOT a plain URL. The JWT lives in localStorage and browsers do not attach
+  // headers to <a href> navigations or <img src> loads, so linking straight
+  // to the endpoint returned {"error":"Not logged in"} in a new tab and
+  // showed broken images. Fetch it WITH the header, then hand the browser a
+  // blob it can render or save. Same approach as downloadFile() above.
+  chatAttachmentBlob: async (id) => {
+    const token = localStorage.getItem('cd_token');
+    const res = await fetch(`${BASE}/chat/attachments/${id}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      let message = `Could not open the file (${res.status})`;
+      try { const d = await res.json(); if (d?.error) message = d.error; } catch { /* non-JSON */ }
+      if (res.status === 401) message = 'Your session has expired — please sign in again.';
+      if (res.status === 403) message = "You don't have access to this file.";
+      throw new Error(message);
+    }
+    const blob = await res.blob();
+    let filename = 'attachment';
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+    if (m) filename = decodeURIComponent(m[1].trim());
+    return { url: URL.createObjectURL(blob), filename, type: blob.type };
+  },
 
   // Attachments need multipart, which req() cannot send (it sets a JSON
   // content-type, which would break the file boundary).
