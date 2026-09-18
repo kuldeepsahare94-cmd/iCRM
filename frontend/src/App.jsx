@@ -20,6 +20,8 @@ const Leads = lazy(() => import('./pages/Leads'));
 const LeadDetail = lazy(() => import('./pages/LeadDetail'));
 const Payments = lazy(() => import('./pages/Payments'));
 const Reports = lazy(() => import('./pages/Reports'));
+const CalendarPage = lazy(() => import('./pages/Calendar'));
+const SettingsCalendar = lazy(() => import('./pages/SettingsCalendar'));
 const Roles = lazy(() => import('./pages/Roles'));
 const Users = lazy(() => import('./pages/Users'));
 const Settings = lazy(() => import('./pages/Settings'));
@@ -105,7 +107,9 @@ export default function App() {
               <Route path="/records/:moduleApiName/:id" element={<UniversalDetail />} />
               {/* Catch-all: without this, any unmatched path renders an
                   empty tree, which looks identical to a crashed app. */}
-              <Route path="*" element={<NotFound />} />
+              <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/settings/calendar" element={<SettingsCalendar />} />
+          <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
         </BrowserRouter>

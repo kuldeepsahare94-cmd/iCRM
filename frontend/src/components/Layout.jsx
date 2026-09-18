@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
+  CalendarDays,
   LayoutDashboard, Users as UsersIcon, Wallet, BarChart3, Settings as SettingsIcon,
   LogOut, UserCog, ShieldCheck, Palette, Menu, X, MessageCircle, Radio, ChevronRight,
   ChevronDown, PhoneCall, Inbox, Megaphone, Plus, Sparkles,
@@ -24,6 +25,7 @@ const links = [
   { to: '/', label: 'Dashboard', end: true, icon: LayoutDashboard },
   { to: '/leads', label: 'Leads', icon: UsersIcon, accent: 'leads' },
   { to: '/inbox', label: 'Inbox', icon: Inbox, accent: 'emails' },
+  { to: '/calendar', label: 'Calendar', icon: CalendarDays, accent: 'meetings' },
   { to: '/email-campaigns', label: 'Campaigns', icon: Megaphone, accent: 'notes' },
   { to: '/payments', label: 'Payments', icon: Wallet, accent: 'payments' },
 ];

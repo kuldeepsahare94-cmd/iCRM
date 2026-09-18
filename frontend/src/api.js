@@ -172,6 +172,25 @@ export const api = {
   updateSavedReport: (id, body) => req('PUT', `/reports/saved/${id}`, body),
   deleteSavedReport: (id) => req('DELETE', `/reports/saved/${id}`),
 
+  // calendar
+  calendarProviders: () => req('GET', '/calendar/providers'),
+  calendarConnections: () => req('GET', '/calendar/connections'),
+  calendarConnectUrl: (provider) => req('GET', `/calendar/connect/${provider}`),
+  syncCalendarConnection: (id, full) => req('POST', `/calendar/connections/${id}/sync`, { full: !!full }),
+  updateCalendarConnection: (id, body) => req('PATCH', `/calendar/connections/${id}`, body),
+  deleteCalendarConnection: (id) => req('DELETE', `/calendar/connections/${id}`),
+  calendarEvents: (params) => req('GET', '/calendar/events' + qs(params)),
+  createCalendarEvent: (body) => req('POST', '/calendar/events', body),
+  updateCalendarEvent: (id, body) => req('PATCH', `/calendar/events/${id}`, body),
+  deleteCalendarEvent: (id) => req('DELETE', `/calendar/events/${id}`),
+  calendarConflicts: (params) => req('GET', '/calendar/conflicts' + qs(params)),
+  calendarSuggest: (params) => req('GET', '/calendar/suggest' + qs(params)),
+  calendarAgenda: (days) => req('GET', '/calendar/agenda' + qs({ days })),
+  // Downloaded WITH the auth header, like every other file in this app. A
+  // plain <a href> would arrive unauthenticated and hand the user a JSON 401
+  // instead of a calendar file — the same trap the chat attachments fell into.
+  downloadCalendarIcs: () => downloadFile('/calendar/export.ics', 'icrm-calendar.ics'),
+
   // notifications
   listNotifications: () => req('GET', '/notifications'),
   markNotificationRead: (key) => req('POST', `/notifications/${key}/read`),

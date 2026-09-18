@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Settings as SettingsIcon, Plus, Trash2, Sparkles, Database, ShieldCheck, Boxes, Zap, GitBranch, Users2, History, Percent, Mail, LayoutList, Check, AlertTriangle } from 'lucide-react';
+import { CalendarDays, Settings as SettingsIcon, Plus, Trash2, Sparkles, Database, ShieldCheck, Boxes, Zap, GitBranch, Users2, History, Percent, Mail, LayoutList, Check, AlertTriangle } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 
@@ -350,6 +350,25 @@ export default function Settings() {
           <span className="text-xs font-medium text-amber shrink-0">Open →</span>
         </Link>
       )}
+
+
+      {/* Ungated like Email: connecting a calendar is a personal setting, not
+          an administrative one — every user manages their own. */}
+      <Link to="/settings/calendar"
+        className="bg-white border border-line rounded-xl p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+            <CalendarDays className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-ink">Calendar</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Connect your own Google or Outlook calendar, and choose what syncs each way.
+            </p>
+          </div>
+        </div>
+        <span className="text-xs font-medium text-amber shrink-0">Open →</span>
+      </Link>
 
       <Link to="/settings/email"
         className="bg-white border border-line rounded-xl p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
