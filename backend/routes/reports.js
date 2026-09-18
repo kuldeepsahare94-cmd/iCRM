@@ -1,124 +1,152 @@
+// ============================================================================
+// Reports API.
+// ============================================================================
+// WHAT CHANGED AND WHY
+//
+// This file used to serve the education-era reports the product started life
+// with: students, admissions, course-wise admissions, fee collection,
+// placements, interviews. Those modules were removed when the CRM became a
+// general B2B product, so those endpoints reported on tables nothing writes
+// to any more — a Reports screen offering "Course-wise Admissions" to a
+// company selling software is worse than no Reports screen.
+//
+// It now serves three things:
+//   GET  /catalogue            — every standard report, grouped by category
+//   GET  /run/:key             — one standard report, with its chart spec
+//   POST /custom/run           — a report the user assembled themselves
+//   CRUD /saved                — saved custom report definitions
+//
+// The old education endpoints are gone from the API surface, but NOTHING was
+// deleted from the database: students, admissions, courses and placements
+// tables are untouched, so an instance that has historical data still has it.
+
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { requirePermission } = require('../middleware/auth');
+const catalogue = require('../services/reports');
+const builder = require('../services/reportBuilder');
 
-// All reports support the same query params: from, to (date range on created_at/relevant date),
-// plus report-specific filters. Frontend handles Export to Excel/PDF/Print client-side (CSV + window.print),
-// same pattern as the base project's utils/csv.js.
+// Report definitions run arbitrary read-only SQL against the live schema. If
+// one throws — a renamed column, a table a custom module dropped — the honest
+// response is to say which report broke, not to return an empty chart that
+// looks like "no data yet".
+function guard(res, fn) {
+  try {
+    return res.json(fn());
+  } catch (err) {
+    const status = err.status || 500;
+    if (status === 500) console.error('[reports]', err.message);
+    return res.status(status).json({ error: err.message || 'Report failed to run.' });
+  }
+}
 
-const dateFilter = (col, from, to) => {
-  const clauses = [];
-  const params = [];
-  if (from) { clauses.push(`date(${col}) >= date(?)`); params.push(from); }
-  if (to) { clauses.push(`date(${col}) <= date(?)`); params.push(to); }
-  return { clause: clauses.length ? ' AND ' + clauses.join(' AND ') : '', params };
-};
+// ---------------------------------------------------------------------------
+// Standard reports
+// ---------------------------------------------------------------------------
 
-router.get('/leads', requirePermission('reports', 'view'), (req, res) => {
-  const { from, to, status } = req.query;
-  const { clause, params } = dateFilter('l.created_at', from, to);
-  let sql = `SELECT l.*, c.course_name AS interested_course_name FROM leads l LEFT JOIN courses c ON c.id = l.interested_course_id WHERE 1=1${clause}`;
-  if (status) { sql += ' AND l.status = ?'; params.push(status); }
-  res.json(db.prepare(sql).all(...params));
+router.get('/catalogue', requirePermission('reports', 'view'), (req, res) =>
+  guard(res, () => catalogue.catalogue(db)));
+
+router.get('/run/:key', requirePermission('reports', 'view'), (req, res) => {
+  const { from, to, ...rest } = req.query;
+  // Anything beyond from/to is a report-specific filter. Reports validate
+  // their own filters; unknown keys are simply ignored by the report.
+  return guard(res, () => catalogue.run(db, req.params.key, { from, to, filters: rest }));
 });
 
-router.get('/students', requirePermission('reports', 'view'), (req, res) => {
-  const { from, to, status } = req.query;
-  const { clause, params } = dateFilter('s.created_at', from, to);
-  let sql = `SELECT * FROM students s WHERE 1=1${clause}`;
-  if (status) { sql += ' AND s.status = ?'; params.push(status); }
-  res.json(db.prepare(sql).all(...params));
-});
+// ---------------------------------------------------------------------------
+// Report builder
+// ---------------------------------------------------------------------------
 
-router.get('/admissions', requirePermission('reports', 'view'), (req, res) => {
-  const { from, to, status, course_id } = req.query;
-  const { clause, params } = dateFilter('a.created_at', from, to);
-  let sql = `SELECT a.*, s.student_name, c.course_name FROM admissions a
-    JOIN students s ON s.id = a.student_id JOIN courses c ON c.id = a.course_id WHERE 1=1${clause}`;
-  if (status) { sql += ' AND a.admission_status = ?'; params.push(status); }
-  if (course_id) { sql += ' AND a.course_id = ?'; params.push(course_id); }
-  res.json(db.prepare(sql).all(...params));
-});
+// The field catalogue the builder UI is assembled from.
+router.get('/builder/modules', requirePermission('reports', 'view'), (req, res) =>
+  guard(res, () => ({
+    modules: builder.reportableModules(db),
+    aggregates: Object.entries(builder.AGGREGATES).map(([fn, a]) => ({
+      fn, label: a.label, needsColumn: a.needsColumn, numeric: !!a.numeric,
+    })),
+    operators: Object.entries(builder.OPERATORS).map(([op, o]) => ({ op, label: o.label, args: o.args })),
+    datePeriods: Object.entries(builder.DATE_GROUPINGS).map(([k, v]) => ({ key: k, label: v.label })),
+  })));
 
-router.get('/course-wise-admissions', requirePermission('reports', 'view'), (req, res) => {
-  res.json(db.prepare(`
-    SELECT c.course_name, COUNT(a.id) total_admissions,
-      SUM(CASE WHEN a.admission_status = 'Active' THEN 1 ELSE 0 END) active,
-      SUM(CASE WHEN a.admission_status = 'Completed' THEN 1 ELSE 0 END) completed
-    FROM courses c LEFT JOIN admissions a ON a.course_id = c.id
-    GROUP BY c.id ORDER BY total_admissions DESC
-  `).all());
-});
+// Distinct values for one field, for filter dropdowns.
+router.get('/builder/values', requirePermission('reports', 'view'), (req, res) =>
+  guard(res, () => builder.fieldValues(db, req.query.module, req.query.field)));
 
-router.get('/fee-collection', requirePermission('reports', 'view'), (req, res) => {
-  const { from, to } = req.query;
-  const { clause, params } = dateFilter('p.payment_date', from, to);
-  const sql = `SELECT p.*, s.student_name, c.course_name FROM payments p
-    JOIN students s ON s.id = p.student_id JOIN courses c ON c.id = p.course_id
-    WHERE p.status = 'Paid'${clause} ORDER BY p.payment_date DESC`;
-  res.json(db.prepare(sql).all(...params));
-});
+router.post('/custom/run', requirePermission('reports', 'view'), (req, res) =>
+  guard(res, () => builder.runCustom(db, req.body || {})));
 
-router.get('/pending-fees', requirePermission('reports', 'view'), (req, res) => {
-  res.json(db.prepare(`
-    SELECT p.*, s.student_name, s.mobile, c.course_name FROM payments p
-    JOIN students s ON s.id = p.student_id JOIN courses c ON c.id = p.course_id
-    WHERE p.status IN ('Pending','Partial') ORDER BY p.created_at
-  `).all());
-});
+// ---------------------------------------------------------------------------
+// Saved reports
+// ---------------------------------------------------------------------------
 
-router.get('/payments', requirePermission('reports', 'view'), (req, res) => {
-  const { from, to, status } = req.query;
-  const { clause, params } = dateFilter('p.created_at', from, to);
-  let sql = `SELECT p.*, s.student_name, c.course_name FROM payments p
-    JOIN students s ON s.id = p.student_id JOIN courses c ON c.id = p.course_id WHERE 1=1${clause}`;
-  if (status) { sql += ' AND p.status = ?'; params.push(status); }
-  res.json(db.prepare(sql).all(...params));
-});
+router.get('/saved', requirePermission('reports', 'view'), (req, res) => guard(res, () =>
+  db.prepare(`
+    SELECT s.*, COALESCE(u.full_name, u.username) AS created_by_name
+    FROM saved_reports s LEFT JOIN users u ON u.id = s.created_by
+    WHERE s.shared = 1 OR s.created_by = ?
+    ORDER BY s.created_at DESC
+  `).all(req.user.id).map((r) => ({ ...r, config: JSON.parse(r.config_json) }))));
 
-router.get('/placements', requirePermission('reports', 'view'), (req, res) => {
-  const { from, to, result } = req.query;
-  const { clause, params } = dateFilter('pl.created_at', from, to);
-  let sql = `SELECT pl.*, s.student_name, co.company_name FROM placements pl
-    JOIN students s ON s.id = pl.student_id JOIN companies co ON co.id = pl.company_id WHERE 1=1${clause}`;
-  if (result) { sql += ' AND pl.result = ?'; params.push(result); }
-  res.json(db.prepare(sql).all(...params));
-});
+router.post('/saved', requirePermission('reports', 'create'), (req, res) => guard(res, () => {
+  const { name, description, module, config, chart_type, palette, shared } = req.body || {};
+  if (!name || !String(name).trim()) { const e = new Error('Give the report a name.'); e.status = 400; throw e; }
+  if (!module) { const e = new Error('A saved report needs a module.'); e.status = 400; throw e; }
+  // Run it once before saving. A saved report that errors the first time
+  // someone opens it is a support call; failing here tells the person who
+  // built it, while they are still looking at it.
+  builder.runCustom(db, { ...(config || {}), module });
+  const info = db.prepare(`
+    INSERT INTO saved_reports (name, description, module, config_json, chart_type, palette, shared, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(String(name).trim(), description || null, module, JSON.stringify(config || {}),
+  chart_type || null, palette || null, shared === false ? 0 : 1, req.user.id);
+  return db.prepare('SELECT * FROM saved_reports WHERE id = ?').get(info.lastInsertRowid);
+}));
 
-router.get('/interviews', requirePermission('reports', 'view'), (req, res) => {
-  const { from, to, status } = req.query;
-  const { clause, params } = dateFilter('pl.interview_date', from, to);
-  let sql = `SELECT pl.*, s.student_name, co.company_name FROM placements pl
-    JOIN students s ON s.id = pl.student_id JOIN companies co ON co.id = pl.company_id WHERE 1=1${clause}`;
-  if (status) { sql += ' AND pl.interview_status = ?'; params.push(status); }
-  res.json(db.prepare(sql).all(...params));
-});
+router.get('/saved/:id/run', requirePermission('reports', 'view'), (req, res) => guard(res, () => {
+  const saved = db.prepare('SELECT * FROM saved_reports WHERE id = ? AND (shared = 1 OR created_by = ?)')
+    .get(req.params.id, req.user.id);
+  if (!saved) { const e = new Error('Report not found.'); e.status = 404; throw e; }
+  const config = JSON.parse(saved.config_json);
+  // A date range passed now overrides the saved one, so one saved report
+  // serves "this month" and "last quarter" without being duplicated.
+  if (req.query.from !== undefined) config.from = req.query.from || null;
+  if (req.query.to !== undefined) config.to = req.query.to || null;
+  const result = builder.runCustom(db, { ...config, module: saved.module });
+  db.prepare("UPDATE saved_reports SET last_run_at = datetime('now') WHERE id = ?").run(saved.id);
+  return {
+    ...result,
+    key: `saved-${saved.id}`,
+    label: saved.name,
+    description: saved.description,
+    palette: saved.palette || 'indigo',
+    module: saved.module,
+    saved_id: saved.id,
+    config,
+    generated_at: new Date().toISOString(),
+  };
+}));
 
-router.get('/companies', requirePermission('reports', 'view'), (req, res) => {
-  res.json(db.prepare(`
-    SELECT co.*, COUNT(pl.id) total_interviews, SUM(CASE WHEN pl.result = 'Selected' THEN 1 ELSE 0 END) selected
-    FROM companies co LEFT JOIN placements pl ON pl.company_id = co.id
-    GROUP BY co.id ORDER BY co.company_name
-  `).all());
-});
+router.put('/saved/:id', requirePermission('reports', 'create'), (req, res) => guard(res, () => {
+  const saved = db.prepare('SELECT * FROM saved_reports WHERE id = ?').get(req.params.id);
+  if (!saved) { const e = new Error('Report not found.'); e.status = 404; throw e; }
+  const { name, description, config, chart_type, palette, shared } = req.body || {};
+  if (config) builder.runCustom(db, { ...config, module: saved.module });
+  db.prepare(`
+    UPDATE saved_reports SET name = ?, description = ?, config_json = ?, chart_type = ?, palette = ?,
+      shared = ?, updated_at = datetime('now') WHERE id = ?
+  `).run(name || saved.name, description ?? saved.description,
+    config ? JSON.stringify(config) : saved.config_json,
+    chart_type ?? saved.chart_type, palette ?? saved.palette,
+    shared === undefined ? saved.shared : (shared ? 1 : 0), saved.id);
+  return db.prepare('SELECT * FROM saved_reports WHERE id = ?').get(saved.id);
+}));
 
-router.get('/revenue', requirePermission('reports', 'view'), (req, res) => {
-  const { from, to } = req.query;
-  const { clause, params } = dateFilter('p.payment_date', from, to);
-  res.json(db.prepare(`
-    SELECT c.course_name, COALESCE(SUM(p.amount),0) revenue, COUNT(p.id) payment_count
-    FROM courses c LEFT JOIN payments p ON p.course_id = c.id AND p.status = 'Paid'${clause}
-    GROUP BY c.id ORDER BY revenue DESC
-  `).all(...params));
-});
-
-router.get('/monthly-admissions', requirePermission('reports', 'view'), (req, res) => {
-  res.json(db.prepare(`SELECT strftime('%Y-%m', created_at) month, COUNT(*) total FROM admissions GROUP BY month ORDER BY month DESC`).all());
-});
-
-router.get('/monthly-collection', requirePermission('reports', 'view'), (req, res) => {
-  res.json(db.prepare(`SELECT strftime('%Y-%m', payment_date) month, COALESCE(SUM(amount),0) total FROM payments WHERE status='Paid' AND payment_date IS NOT NULL GROUP BY month ORDER BY month DESC`).all());
-});
+router.delete('/saved/:id', requirePermission('reports', 'delete'), (req, res) => guard(res, () => {
+  db.prepare('DELETE FROM saved_reports WHERE id = ?').run(req.params.id);
+  return { ok: true };
+}));
 
 module.exports = router;

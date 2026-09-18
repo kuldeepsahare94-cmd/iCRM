@@ -24,6 +24,7 @@ require('./db-phase32-quotation-discount');
 require('./db-phase33-wa-quick-templates');
 require('./db-phase34-lead-company');
 require('./db-phase35-chat');
+require('./db-phase36-reports');
 
 const app = express();
 
