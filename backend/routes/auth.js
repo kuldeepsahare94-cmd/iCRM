@@ -18,6 +18,13 @@ router.post('/login', (req, res) => {
 
   const role = user.role_id ? db.prepare('SELECT id, name FROM roles WHERE id=?').get(user.role_id) : null;
   const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+
+  // Signing in is the clearest possible sign of life — without this, someone
+  // who has just logged in shows as offline in the team chat until their
+  // first authenticated request happens to land.
+  try {
+    db.prepare("UPDATE users SET last_seen_at = datetime('now') WHERE id = ?").run(user.id);
+  } catch { /* pre-migration database — presence is best-effort */ }
   res.json({
     token,
     user: {

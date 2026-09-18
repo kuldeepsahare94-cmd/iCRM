@@ -1,7 +1,11 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const db = new Database(path.join(__dirname, 'crm.db'));
+// Path comes from dataDir.js so the database lives on the persistent disk
+// in production and in backend/ locally — see that file for why.
+const { DB_FILE } = require('./dataDir');
+
+const db = new Database(DB_FILE);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 

@@ -1,6 +1,19 @@
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 
+// Inlined rather than imported from services/chatService to keep the auth
+// middleware free of a dependency on a feature module (chatService requires
+// db, which requires dataDir — a cycle risk in the auth path).
+const lastPresenceWrite = new Map();
+function touchPresence(userId) {
+  const now = Date.now();
+  if (now - (lastPresenceWrite.get(userId) || 0) < 20000) return;
+  lastPresenceWrite.set(userId, now);
+  try {
+    db.prepare("UPDATE users SET last_seen_at = datetime('now') WHERE id = ?").run(userId);
+  } catch { /* column not migrated yet on an old database — presence is best-effort */ }
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 
 function loadPermissions(roleId) {
@@ -49,6 +62,11 @@ function requireAuth(req, res, next) {
     if (!user || !user.active) return res.status(401).json({ error: 'Account is inactive or no longer exists' });
     user.permissions = loadPermissions(user.role_id);
     req.user = user;
+    // Presence for the team chat: "online" means signed in and using the
+    // CRM, so it is refreshed by any authenticated request rather than only
+    // by chat traffic — otherwise someone working in Leads all morning shows
+    // as offline to their colleagues. Throttled to one write per 20s.
+    touchPresence(user.id);
     next();
   } catch (e) {
     // A server-side fault, not an authentication failure. Reporting 500 keeps

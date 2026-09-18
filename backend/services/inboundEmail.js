@@ -22,8 +22,7 @@ const crypto = require('crypto');
 const db = require('../db');
 const { decrypt } = require('./whatsapp/crypto');
 
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+const { UPLOAD_DIR } = require('../dataDir');
 
 const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
 

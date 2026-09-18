@@ -11,7 +11,7 @@ const { requirePermission } = require('../middleware/auth');
 const { syncAccount, syncAll } = require('../services/inboundEmail');
 const { sendEmail } = require('../services/email');
 
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
+const { UPLOAD_DIR } = require('../dataDir');
 
 const LIST_COLS = `e.id, e.subject, e.from_address, e.to_address, e.direction, e.status,
   e.thread_key, e.is_read, e.has_attachments, e.matched_by, e.received_at, e.sent_at,

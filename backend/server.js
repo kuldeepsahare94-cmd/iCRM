@@ -22,6 +22,8 @@ require('./db-phase30-email-campaigns');
 require('./db-phase31-email-diagnostics');
 require('./db-phase32-quotation-discount');
 require('./db-phase33-wa-quick-templates');
+require('./db-phase34-lead-company');
+require('./db-phase35-chat');
 
 const app = express();
 
@@ -53,12 +55,20 @@ app.use(express.json());
 app.use('/api/auth', require('./routes/auth'));
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
+// Required-field enforcement runs before every record route, so a field
+// marked mandatory in Settings is actually enforced on save — previously
+// the flag was stored and displayed but never checked, so a record could
+// be created with every required field blank.
+const { enforceRequiredFields } = require('./middleware/requiredFields');
+app.use('/api', enforceRequiredFields);
+
 // Everything below requires a valid, active login
 app.use('/api/leads', requireAuth, require('./routes/leads'));
 app.use('/api/payments', requireAuth, require('./routes/payments'));
 app.use('/api/dashboard', requireAuth, require('./routes/dashboard'));
 app.use('/api/reports', requireAuth, require('./routes/reports'));
 app.use('/api/notifications', requireAuth, require('./routes/notifications'));
+app.use('/api/chat', requireAuth, require('./routes/chat'));
 app.use('/api/roles', requireAuth, require('./routes/roles'));
 app.use('/api/users', requireAuth, require('./routes/users'));
 app.use('/api/settings', requireAuth, require('./routes/settings'));

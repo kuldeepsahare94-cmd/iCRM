@@ -10,6 +10,7 @@ const router = express.Router();
 const db = require('../db');
 const { requirePermission } = require('../middleware/auth');
 const svc = require('../services/metadataService');
+const { planImport, createFields, displayNamePlan } = require('../services/importMapping');
 
 // ===== Audit log =====
 router.get('/audit', requirePermission('settings', 'view'), (req, res) => {
@@ -109,10 +110,54 @@ router.get('/import-template/:module', requirePermission('settings', 'view'), (r
   }
 });
 
+// ===== Import analysis =====
+// POST /api/admin/import-analyze/:module  { csv: "..." }
+//
+// Answers "what would this file do?" without touching anything: which
+// headers match fields you already have, which would create new ones (and
+// with what type), and which would be ignored. Creating fields is a schema
+// change, so it should never be a surprise.
+router.post('/import-analyze/:module', requirePermission('settings', 'edit'), (req, res) => {
+  try {
+    const mod = resolveModuleOrThrow(req.params.module);
+    const rows = parseCsv(req.body.csv || '');
+    if (rows.length < 2) return res.status(400).json({ error: 'CSV needs a header row and at least one data row' });
+
+    const header = rows[0].map((h) => h.trim());
+    const dataRows = rows.slice(1).filter((r) => r.some((v) => String(v ?? '').trim()));
+    const plan = planImport({
+      existingColumns: db.prepare(`PRAGMA table_info(${mod.table_name})`).all(),
+      existingFields: db.prepare('SELECT api_name, label FROM module_fields WHERE module_id=?').all(mod.id),
+      header,
+      dataRows,
+    });
+
+    res.json({
+      module: mod.api_name,
+      rows: dataRows.length,
+      ...plan,
+      display_name: displayNamePlan({
+        existingColumns: db.prepare(`PRAGMA table_info(${mod.table_name})`).all(),
+        mapped: plan.mapped,
+        create: plan.create,
+      }),
+    });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
 // ===== Import =====
-// POST /api/admin/import/:module  { csv: "...", dry_run?: true }
+// POST /api/admin/import/:module
+//   { csv: "...", dry_run?: true, create_missing_fields?: true }
+//
 // Always validates the whole file first and reports every problem before
 // writing anything — a half-imported file is worse than a rejected one.
+//
+// With create_missing_fields, a header that doesn't match any existing field
+// becomes a new field on this module (type inferred from the data) instead of
+// rejecting the file. Field creation happens inside the same transaction as
+// the rows, so a failed import leaves no half-built schema behind.
 router.post('/import/:module', requirePermission('settings', 'edit'), (req, res) => {
   try {
     const mod = resolveModuleOrThrow(req.params.module);
@@ -123,10 +168,21 @@ router.post('/import/:module', requirePermission('settings', 'edit'), (req, res)
     if (rows.length < 2) return res.status(400).json({ error: 'CSV needs a header row and at least one data row' });
 
     const header = rows[0].map((h) => h.trim());
+    const autoCreate = !!req.body.create_missing_fields;
+
+    // ---- Auto-create path -------------------------------------------------
+    if (autoCreate) {
+      return importWithFieldCreation({ req, res, mod, header, rows });
+    }
+
     const allowed = importableColumns(mod.table_name);
     const unknown = header.filter((h) => h && !allowed.includes(h));
     if (unknown.length) {
-      return res.status(400).json({ error: `Unknown column(s): ${unknown.join(', ')}`, allowed_columns: allowed });
+      return res.status(400).json({
+        error: `Unknown column(s): ${unknown.join(', ')}`,
+        allowed_columns: allowed,
+        hint: 'Re-run with create_missing_fields to map these automatically and create whatever is genuinely new.',
+      });
     }
     const usable = header.filter((h) => allowed.includes(h));
     if (usable.length === 0) return res.status(400).json({ error: 'No recognised columns in the header row', allowed_columns: allowed });
@@ -176,5 +232,97 @@ router.post('/import/:module', requirePermission('settings', 'edit'), (req, res)
     res.status(e.status || 500).json({ error: e.message });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Import that maps friendly headers onto existing fields and creates only
+// what is genuinely new.
+// ---------------------------------------------------------------------------
+function importWithFieldCreation({ req, res, mod, header, rows }) {
+  const dataRows = rows.slice(1).filter((r) => r.some((v) => String(v ?? '').trim()));
+  if (dataRows.length === 0) return res.status(400).json({ error: 'No data rows found' });
+
+  const existingColumns = db.prepare(`PRAGMA table_info(${mod.table_name})`).all();
+  const existingFields = db.prepare('SELECT api_name, label FROM module_fields WHERE module_id=?').all(mod.id);
+
+  const plan = planImport({ existingColumns, existingFields, header, dataRows });
+
+  if (plan.mapped.length === 0 && plan.create.length === 0) {
+    return res.status(400).json({ error: 'Nothing in this file could be imported', skipped: plan.skipped });
+  }
+
+  // A file with hundreds of stray headers would otherwise reshape the module
+  // beyond recognition.
+  const MAX_NEW_FIELDS = 40;
+  if (plan.create.length > MAX_NEW_FIELDS) {
+    return res.status(400).json({
+      error: `This file would create ${plan.create.length} new fields (limit ${MAX_NEW_FIELDS}). `
+           + 'Check the header row is correct before importing.',
+      would_create: plan.create.map((c) => c.column),
+    });
+  }
+
+  const nameFill = displayNamePlan({ existingColumns, mapped: plan.mapped, create: plan.create });
+
+  if (req.body.dry_run) {
+    return res.json({ dry_run: true, would_import: dataRows.length, ...plan, display_name: nameFill });
+  }
+
+  // Column -> index in the CSV row, for everything being written.
+  const targets = [
+    ...plan.mapped.map((m) => ({ column: m.column, idx: header.indexOf(m.header) })),
+    ...plan.create.map((c) => ({ column: c.column, idx: header.indexOf(c.header) })),
+  ];
+
+  let created = [];
+  let imported = 0;
+
+  const tx = db.transaction(() => {
+    // Schema first, so the INSERT below can reference the new columns.
+    created = createFields(db, { tableName: mod.table_name, moduleId: mod.id, create: plan.create });
+
+    const cols = targets.map((t) => t.column);
+    if (nameFill) cols.push(nameFill.target);
+
+    const insert = db.prepare(
+      `INSERT INTO ${mod.table_name} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`,
+    );
+
+    const nameIdx = nameFill
+      ? nameFill.from.map((c) => (targets.find((t) => t.column === c) || {}).idx).filter((i) => i !== undefined)
+      : [];
+
+    for (const r of dataRows) {
+      const values = targets.map((t) => {
+        const v = r[t.idx];
+        const s = v === undefined || v === null ? '' : String(v).trim();
+        // "http://" on its own is a placeholder, not a website — several
+        // CRM exports emit it for every blank URL cell.
+        if (s === '' || s === 'http://' || s === 'https://') return null;
+        return s;
+      });
+
+      if (nameFill) {
+        const composed = nameIdx.map((i) => String(r[i] ?? '').trim()).filter(Boolean).join(' ');
+        values.push(composed || null);
+      }
+      insert.run(values);
+      imported++;
+    }
+  });
+
+  try {
+    tx();   // all-or-nothing: rows AND new fields roll back together
+  } catch (e) {
+    return res.status(400).json({ error: `Import failed, nothing was written: ${e.message}` });
+  }
+
+  res.json({
+    imported,
+    fields_created: created,
+    mapped_to_existing: plan.mapped.map((m) => ({ header: m.header, field: m.column, via: m.via })),
+    skipped: plan.skipped,
+    display_name_filled_from: nameFill ? nameFill.from : null,
+  });
+}
 
 module.exports = router;
