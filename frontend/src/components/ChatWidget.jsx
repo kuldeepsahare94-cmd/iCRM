@@ -14,16 +14,18 @@
  * hidden so an idle tab is nearly free. Swapping in SSE or a socket later
  * only changes this file and the /poll route.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   MessageSquare, X, Search, Paperclip, Send, Users, Megaphone, ArrowLeft,
   Check, CheckCheck, Trash2, Bell, BellOff, FileText, Plus, Reply, Minus, Maximize2,
+  Volume2, VolumeX, Play,
 } from 'lucide-react';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { avatarGradientFor, initialsOf } from '../theme/avatarColors';
+import { TONES, getTone, setTone, playTone } from './chatSounds';
 
 const POLL_ACTIVE_MS = 5000;
 const POLL_HIDDEN_MS = 20000;
@@ -341,13 +343,32 @@ export default function ChatWidget() {
   const [replyTo, setReplyTo] = useState(null);
   const [minimised, setMinimised] = useState(false);
 
+  // Notification tone. Read once from localStorage; the ref is what the
+  // polling loop reads, because that loop is set up with stale closures and
+  // would otherwise keep playing whatever tone was selected when it started.
+  const [tone, setToneState] = useState(() => getTone(user?.id));
+  const toneRef = useRef(tone);
+  const [soundMenu, setSoundMenu] = useState(false);
+  useEffect(() => { toneRef.current = tone; }, [tone]);
+  const chooseTone = (id) => {
+    setToneState(id);
+    setTone(user?.id, id);
+    playTone(id);          // hear it immediately — that is the whole point
+  };
+
   const cursor = useRef(0);
   const messageRefs = useRef({});
   const bottomRef = useRef(null);
+  const scrollRef = useRef(null);
+  // Set the moment a different conversation is selected, cleared once its
+  // first paint has been pinned to the bottom. See the scroll effect below.
+  const jumpInstantly = useRef(true);
   const activeIdRef = useRef(null);
   const openRef = useRef(false);
+  const minimisedRef = useRef(false);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   useEffect(() => { openRef.current = open; }, [open]);
+  useEffect(() => { minimisedRef.current = minimised; }, [minimised]);
 
   const active = useMemo(() => conversations.find((c) => c.id === activeId) || null, [conversations, activeId]);
 
@@ -382,10 +403,18 @@ export default function ChatWidget() {
           api.chatMarkRead(openId).catch(() => {});
         }
         // Anything else raises a popup, unless that conversation is muted.
-        const elsewhere = res.messages.filter((m) => m.conversation_id !== openId || !openRef.current);
+        // A popup is for something you cannot already see. That means a
+        // different conversation, a closed panel — or a minimised one, which
+        // is open but shows no messages at all, so a new message there would
+        // otherwise arrive completely silently.
+        const visible = openRef.current && !minimisedRef.current;
+        const elsewhere = res.messages.filter((m) => m.conversation_id !== openId || !visible);
         const mutedIds = new Set(res.conversations.filter((c) => c.muted).map((c) => c.id));
         const notify = elsewhere.filter((m) => !mutedIds.has(m.conversation_id));
         if (notify.length) {
+          // One tone per poll, not one per message: three messages arriving
+          // together should sound like one notification, not a burst.
+          playTone(toneRef.current);
           setToasts((t) => [...t, ...notify.slice(-3)].slice(-3));
           notify.slice(-3).forEach((m) => {
             setTimeout(() => setToasts((t) => t.filter((x) => x.id !== m.id)), TOAST_MS);
@@ -416,6 +445,7 @@ export default function ChatWidget() {
 
   useEffect(() => {
     setReplyTo(null);
+    jumpInstantly.current = true;
     if (!activeId) { setMessages([]); return; }
     api.chatMessages(activeId).then((m) => {
       setMessages(m);
@@ -423,7 +453,61 @@ export default function ChatWidget() {
     }).catch((e) => setError(e.message));
   }, [activeId, tick]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length]);
+  // Where the message list sits when you open a conversation.
+  //
+  // It has to open on the NEWEST message — that is the one you came to read.
+  // The first version scrolled with `scrollIntoView({ behavior: 'smooth' })`
+  // keyed on messages.length, which failed on open for two reasons: a smooth
+  // scroll is animated, and from a standing start at the top of a long history
+  // it either visibly crawls down or gets cancelled by the next render; and it
+  // ran in useEffect, i.e. after the browser had already painted the top of
+  // the list.
+  //
+  // So: useLayoutEffect (before paint, so there is no flash of the oldest
+  // message) and a direct scrollTop assignment (instant, no animation) for the
+  // initial load. Smooth scrolling is kept only for messages that arrive while
+  // you are watching — there it reads as movement rather than a jump.
+  //
+  // The re-pins on a timer cover attachments: an image or PDF thumbnail has no
+  // height until it loads, so the container grows a moment after the first
+  // paint and the bottom moves down under us.
+  useLayoutEffect(() => {
+    const box = scrollRef.current;
+    if (!box) return undefined;
+
+    if (jumpInstantly.current) {
+      jumpInstantly.current = false;
+      const pin = () => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; };
+      pin();
+      const timers = [requestAnimationFrame(pin)];
+      const t1 = setTimeout(pin, 150);
+      const t2 = setTimeout(pin, 500);
+      return () => { timers.forEach(cancelAnimationFrame); clearTimeout(t1); clearTimeout(t2); };
+    }
+
+    // A new message arrived. Only follow it if the reader is already at the
+    // bottom — yanking someone away from history they scrolled up to read is
+    // worse than a missed message, and the unread badge covers that case.
+    const distanceFromBottom = box.scrollHeight - box.scrollTop - box.clientHeight;
+    if (distanceFromBottom < 160) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    return undefined;
+  }, [messages]);
+
+  // Re-opening or restoring the panel remounts the list with the same messages
+  // array, so the effect above does not re-run. Pin again here, otherwise a
+  // conversation you close and reopen comes back at the top.
+  useLayoutEffect(() => {
+    if (!open || minimised) return undefined;
+    // Pin directly rather than setting jumpInstantly — that flag is only
+    // cleared by the messages effect, so setting it here left it armed, and
+    // the next arriving message then yanked the view to the bottom even for
+    // someone scrolled up reading history.
+    const pin = () => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; };
+    pin();
+    const frame = requestAnimationFrame(pin);
+    const t = setTimeout(pin, 150);
+    return () => { cancelAnimationFrame(frame); clearTimeout(t); };
+  }, [open, minimised]);
 
   // Escape closes the panel — the usual way out now that clicking the page
   // no longer dismisses it (the page is deliberately still interactive).
@@ -591,6 +675,51 @@ export default function ChatWidget() {
               <div className="flex items-center justify-between px-4 py-3 border-b border-line">
                 <h2 className="text-sm font-semibold text-ink">Team Chat</h2>
                 <div className="flex items-center gap-1">
+                  {/* Notification tone. Lives here rather than in Settings
+                      because it is chosen in the moment a sound annoys you,
+                      and each option previews on click so it can be picked by
+                      ear instead of by name. */}
+                  <div className="relative">
+                    <button onClick={() => setSoundMenu((s) => !s)} title="Notification tone"
+                      className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-canvas">
+                      {tone === 'silent'
+                        ? <VolumeX className="w-4 h-4 text-[var(--color-muted)]" />
+                        : <Volume2 className="w-4 h-4 text-[var(--color-muted)]" />}
+                    </button>
+                    {soundMenu && (
+                      <>
+                        <div className="fixed inset-0 z-[78]" onClick={() => setSoundMenu(false)} />
+                        <div className="absolute left-0 top-9 z-[79] w-56 bg-white border border-line rounded-xl shadow-xl py-1">
+                          <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted)]">
+                            Notification tone
+                          </p>
+                          {TONES.map((t) => (
+                            <button
+                              key={t.id}
+                              onClick={() => chooseTone(t.id)}
+                              className={`w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-canvas ${
+                                tone === t.id ? 'bg-canvas' : ''
+                              }`}
+                            >
+                              <span className="w-4 flex-shrink-0">
+                                {tone === t.id && <Check className="w-3.5 h-3.5 text-[var(--color-brand)]" />}
+                              </span>
+                              <span className="flex-1 min-w-0">
+                                <span className="block text-sm text-ink">{t.label}</span>
+                                <span className="block text-[11px] text-[var(--color-muted)]">{t.hint}</span>
+                              </span>
+                              {t.id !== 'silent' && (
+                                <Play className="w-3 h-3 text-[var(--color-muted)] flex-shrink-0" />
+                              )}
+                            </button>
+                          ))}
+                          <p className="px-3 pt-1.5 pb-1 text-[10px] text-[var(--color-muted)] border-t border-line mt-1">
+                            Your choice only — it applies to this browser and no one else.
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
                   <button onClick={() => setView('broadcast')} title="Send to several people"
                     className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-canvas">
                     <Megaphone className="w-4 h-4 text-[var(--color-muted)]" />
@@ -714,7 +843,7 @@ export default function ChatWidget() {
                     </button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto min-h-0 px-4 py-3 space-y-2" style={{ background: 'var(--color-canvas)' }}>
+                  <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 px-4 py-3 space-y-2" style={{ background: 'var(--color-canvas)' }}>
                     {messages.length === 0 && (
                       <p className="text-xs text-[var(--color-muted)] text-center py-8">
                         No messages yet — say hello.
