@@ -19,7 +19,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   MessageSquare, X, Search, Paperclip, Send, Users, Megaphone, ArrowLeft,
-  Check, CheckCheck, Trash2, Bell, BellOff, FileText, Plus,
+  Check, CheckCheck, Trash2, Bell, BellOff, FileText, Plus, Reply, Minus, Maximize2,
 } from 'lucide-react';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -143,7 +143,7 @@ function Attachment({ att }) {
   );
 }
 
-function MessageBubble({ m, isGroup, onDelete }) {
+function MessageBubble({ m, isGroup, onDelete, onReply, onJumpTo }) {
   const mine = m.mine;
   return (
     <div className={`flex ${mine ? 'justify-end' : 'justify-start'} group`}>
@@ -152,6 +152,22 @@ function MessageBubble({ m, isGroup, onDelete }) {
       }`}>
         {isGroup && !mine && (
           <div className="text-[11px] font-semibold mb-0.5" style={{ color: 'var(--color-brand)' }}>{m.sender_name}</div>
+        )}
+
+        {/* The message being replied to, quoted above this one. Clicking it
+            scrolls back to the original. */}
+        {m.reply_to && !m.deleted && (
+          <button type="button" onClick={() => onJumpTo(m.reply_to.id)}
+            className={`block w-full text-left rounded-lg px-2 py-1 mb-1 border-l-2 ${
+              mine ? 'bg-white/15 border-white/50' : 'bg-white/70 border-[var(--color-brand)]'
+            }`}>
+            <span className={`block text-[10px] font-semibold ${mine ? 'text-white/90' : 'text-[var(--color-brand)]'}`}>
+              {m.reply_to.mine ? 'You' : m.reply_to.sender_name}
+            </span>
+            <span className={`block text-[11px] truncate ${mine ? 'text-white/75' : 'text-[var(--color-muted)]'}`}>
+              {m.reply_to.body}
+            </span>
+          </button>
         )}
 
         {m.deleted ? (
@@ -181,6 +197,12 @@ function MessageBubble({ m, isGroup, onDelete }) {
           )}
           {mine && !m.deleted && isGroup && m.seen_by.length > 0 && (
             <span title={`Seen by ${m.seen_by.map((s) => s.name).join(', ')}`}>{m.seen_by.length}</span>
+          )}
+          {!m.deleted && (
+            <button onClick={() => onReply(m)} title="Reply to this message"
+              className="opacity-0 group-hover:opacity-100 transition-opacity ml-0.5">
+              <Reply className="w-3 h-3" />
+            </button>
           )}
           {mine && !m.deleted && (
             <button onClick={() => onDelete(m)} title="Delete message"
@@ -314,8 +336,13 @@ export default function ChatWidget() {
   const [toasts, setToasts] = useState([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  // Which message the composer is replying to, and whether the panel is
+  // shrunk to a bar so the CRM is fully usable while staying reachable.
+  const [replyTo, setReplyTo] = useState(null);
+  const [minimised, setMinimised] = useState(false);
 
   const cursor = useRef(0);
+  const messageRefs = useRef({});
   const bottomRef = useRef(null);
   const activeIdRef = useRef(null);
   const openRef = useRef(false);
@@ -388,6 +415,7 @@ export default function ChatWidget() {
   }, [open, canChat]);
 
   useEffect(() => {
+    setReplyTo(null);
     if (!activeId) { setMessages([]); return; }
     api.chatMessages(activeId).then((m) => {
       setMessages(m);
@@ -401,10 +429,16 @@ export default function ChatWidget() {
   // no longer dismisses it (the page is deliberately still interactive).
   useEffect(() => {
     if (!open) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      // First Escape tucks it away, a second closes it.
+      if (replyTo) setReplyTo(null);
+      else if (!minimised) setMinimised(true);
+      else setOpen(false);
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [open, minimised, replyTo]);
 
   // -------------------------------------------------------------- actions
   const openWith = async (u) => {
@@ -421,9 +455,9 @@ export default function ChatWidget() {
     if (!activeId || (!draft.trim() && files.length === 0) || sending) return;
     setSending(true); setError('');
     try {
-      const msg = await api.chatSend(activeId, { body: draft.trim(), files });
+      const msg = await api.chatSend(activeId, { body: draft.trim(), files, replyToId: replyTo?.id });
       setMessages((m) => [...m, msg]);
-      setDraft(''); setFiles([]);
+      setDraft(''); setFiles([]); setReplyTo(null);
       tick();
     } catch (err) { setError(err.message); } finally { setSending(false); }
   };
@@ -441,9 +475,20 @@ export default function ChatWidget() {
     try { await api.chatMute(active.id, !active.muted); tick(); } catch (e) { setError(e.message); }
   };
 
+  // Clicking a quote scrolls to the original and flashes it, so a reply in a
+  // long thread can be traced back.
+  const jumpTo = (id) => {
+    const el = messageRefs.current[id];
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('ring-2', 'ring-[var(--color-brand)]', 'rounded-2xl');
+    setTimeout(() => el.classList.remove('ring-2', 'ring-[var(--color-brand)]', 'rounded-2xl'), 1400);
+  };
+
   const openToast = (t) => {
     setActiveId(t.conversation_id);
     setOpen(true);
+    setMinimised(false);
     setToasts((x) => x.filter((y) => y.id !== t.id));
   };
 
@@ -503,7 +548,31 @@ export default function ChatWidget() {
         </div>
       ), document.body)}
 
-      {open && createPortal((
+      {/* Minimised: a small bar in the corner. Polling, unread counts and
+          popups all keep working — this is only a change of size, so people
+          can leave chat running while they work. */}
+      {open && minimised && createPortal((
+        <button
+          type="button"
+          onClick={() => setMinimised(false)}
+          className="fixed bottom-4 right-[76px] z-[80] flex items-center gap-2.5 bg-white border border-line
+                     shadow-lg rounded-full pl-3 pr-4 py-2.5 hover:border-[var(--color-brand)]"
+        >
+          <MessageSquare className="w-4 h-4 text-[var(--color-brand)]" />
+          <span className="text-sm font-medium text-ink">
+            {active ? active.title : 'Team Chat'}
+          </span>
+          {unread > 0 && (
+            <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white
+              flex items-center justify-center" style={{ background: 'var(--color-danger)' }}>
+              {unread > 99 ? '99+' : unread}
+            </span>
+          )}
+          <Maximize2 className="w-3.5 h-3.5 text-[var(--color-muted)]" />
+        </button>
+      ), document.body)}
+
+      {open && !minimised && createPortal((
         <>
           {/* No dimming backdrop and no full-screen click-catcher: the point
               of a team chat is to keep it open WHILE working, and a 760px
@@ -530,7 +599,12 @@ export default function ChatWidget() {
                     className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-canvas">
                     <Plus className="w-4 h-4 text-[var(--color-muted)]" />
                   </button>
-                  <button onClick={() => setOpen(false)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-canvas sm:hidden">
+                  <button onClick={() => setMinimised(true)} title="Minimise"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-canvas">
+                    <Minus className="w-4 h-4 text-[var(--color-muted)]" />
+                  </button>
+                  <button onClick={() => setOpen(false)} title="Close"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-canvas sm:hidden">
                     <X className="w-4 h-4 text-[var(--color-muted)]" />
                   </button>
                 </div>
@@ -630,7 +704,12 @@ export default function ChatWidget() {
                       className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-canvas">
                       {active.muted ? <BellOff className="w-4 h-4 text-[var(--color-muted)]" /> : <Bell className="w-4 h-4 text-[var(--color-muted)]" />}
                     </button>
-                    <button onClick={() => setOpen(false)} className="w-8 h-8 rounded-lg hidden sm:flex items-center justify-center hover:bg-canvas">
+                    <button onClick={() => setMinimised(true)} title="Minimise"
+                      className="w-8 h-8 rounded-lg hidden sm:flex items-center justify-center hover:bg-canvas">
+                      <Minus className="w-4 h-4 text-[var(--color-muted)]" />
+                    </button>
+                    <button onClick={() => setOpen(false)} title="Close"
+                      className="w-8 h-8 rounded-lg hidden sm:flex items-center justify-center hover:bg-canvas">
                       <X className="w-4 h-4 text-[var(--color-muted)]" />
                     </button>
                   </div>
@@ -642,7 +721,15 @@ export default function ChatWidget() {
                       </p>
                     )}
                     {messages.map((m) => (
-                      <MessageBubble key={m.id} m={m} isGroup={active.type === 'group'} onDelete={removeMessage} />
+                      <div key={m.id} ref={(el) => { messageRefs.current[m.id] = el; }}>
+                        <MessageBubble
+                          m={m}
+                          isGroup={active.type === 'group'}
+                          onDelete={removeMessage}
+                          onReply={setReplyTo}
+                          onJumpTo={jumpTo}
+                        />
+                      </div>
                     ))}
                     <div ref={bottomRef} />
                   </div>
@@ -657,6 +744,24 @@ export default function ChatWidget() {
                           <button onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}><X className="w-3 h-3" /></button>
                         </span>
                       ))}
+                    </div>
+                  )}
+
+                  {replyTo && (
+                    <div className="flex items-start gap-2 px-3 py-2 border-t border-line bg-[var(--color-canvas)]">
+                      <div className="w-0.5 self-stretch rounded" style={{ background: 'var(--color-brand)' }} />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[11px] font-semibold" style={{ color: 'var(--color-brand)' }}>
+                          Replying to {replyTo.mine ? 'yourself' : replyTo.sender_name}
+                        </div>
+                        <div className="text-xs text-[var(--color-muted)] truncate">
+                          {replyTo.body || (replyTo.attachments?.length ? 'Attachment' : '')}
+                        </div>
+                      </div>
+                      <button type="button" onClick={() => setReplyTo(null)} title="Cancel reply"
+                        className="shrink-0 text-[var(--color-muted)] hover:text-ink">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   )}
 
