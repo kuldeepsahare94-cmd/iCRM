@@ -290,7 +290,7 @@ export default function LeadDetail() {
   const filteredActivities = tab === 'all' ? lead.activities : lead.activities.filter((a) => a.type === tab);
 
   return (
-    <div className="max-w-[1500px] mx-auto">
+    <div className="max-w-[1600px] mx-auto">
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
         <div className="flex items-center gap-1.5 text-xs text-slate-500">
           <button onClick={() => navigate('/leads')} className="flex items-center gap-1 hover:text-ink font-medium">

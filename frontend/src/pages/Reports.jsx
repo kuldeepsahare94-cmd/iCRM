@@ -3,6 +3,7 @@ import { Download, Printer, BarChart3 } from 'lucide-react';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
 import { downloadCSV } from '../utils/csv';
+import { PageHeader } from '../components/ui';
 
 // Only reports that make sense for a general B2B CRM. The education-era
 // reports (students, admissions, course-wise, placements, interviews,
@@ -47,14 +48,13 @@ export default function Reports() {
 
   return (
     <div className="max-w-[1600px] mx-auto">
-      <div className="flex items-center gap-3 no-print">
-        <div className="w-10 h-10 rounded-xl bg-amber-soft text-amber flex items-center justify-center">
-          <BarChart3 className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="t-page-title">Reports</h1>
-          <p className="text-sm text-slate-500 mt-1">Every module, searchable and exportable.</p>
-        </div>
+      <div className="no-print">
+        <PageHeader
+          title="Reports"
+          subtitle="Every module, searchable and exportable."
+          icon={BarChart3}
+          accent="reports"
+        />
       </div>
 
       <div className="flex gap-2 mt-6 flex-wrap no-print">

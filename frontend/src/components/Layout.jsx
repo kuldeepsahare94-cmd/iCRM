@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users as UsersIcon, Wallet, BarChart3, Settings as SettingsIcon,
@@ -202,6 +202,27 @@ function Breadcrumb() {
   );
 }
 
+/* Shown for the fraction of a second a route chunk takes to arrive. It
+   mimics the shape of a typical page (title, KPI row, table) so the
+   transition reads as the page filling in rather than a flash of empty
+   space followed by a jump. */
+function PageLoading() {
+  return (
+    <div className="animate-pulse space-y-6" aria-busy="true" aria-label="Loading">
+      <div className="space-y-2">
+        <div className="h-7 w-52 rounded-lg bg-slate-200/80 dark:bg-slate-700/60" />
+        <div className="h-4 w-72 rounded bg-slate-200/60 dark:bg-slate-700/40" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-24 rounded-2xl bg-slate-200/70 dark:bg-slate-700/50" />
+        ))}
+      </div>
+      <div className="h-72 rounded-2xl bg-slate-200/60 dark:bg-slate-700/40" />
+    </div>
+  );
+}
+
 export default function Layout() {
   // Collapsible overlay drawer on EVERY screen size — explicitly requested:
   // closed by default, opened by the hamburger, backdrop + Escape + navigate
@@ -293,7 +314,12 @@ export default function Layout() {
 
         <main className="px-4 sm:px-6 py-6">
           <ErrorBoundary key={location.pathname}>
-            <Outlet />
+            {/* Routes are lazy-loaded (see App.jsx). Keeping the boundary
+                here rather than around the whole app means the sidebar and
+                header stay on screen while the next page's chunk arrives. */}
+            <Suspense fallback={<PageLoading />}>
+              <Outlet />
+            </Suspense>
           </ErrorBoundary>
         </main>
       </div>

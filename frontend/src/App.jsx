@@ -1,41 +1,51 @@
+import { lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
+
+// Eager: these are needed for the very first paint (or to recover from a
+// failed one), so code-splitting them would only add a round-trip.
 import Login from './pages/Login';
 import NotFound from './pages/NotFound';
-import Dashboard from './pages/Dashboard';
-import Leads from './pages/Leads';
-import LeadDetail from './pages/LeadDetail';
-import Payments from './pages/Payments';
-import Reports from './pages/Reports';
-import Roles from './pages/Roles';
-import Users from './pages/Users';
-import Settings from './pages/Settings';
-import SettingsModules from './pages/SettingsModules';
-import FieldLayoutManager from './pages/FieldLayoutManager';
-import SettingsWorkflows from './pages/SettingsWorkflows';
-import SettingsPipelines from './pages/SettingsPipelines';
-import SettingsTeams from './pages/SettingsTeams';
-import SettingsData from './pages/SettingsData';
-import SettingsFinance from './pages/SettingsFinance';
-import CallReports from './pages/CallReports';
-import Customer360 from './pages/Customer360';
-import SettingsEmail from './pages/SettingsEmail';
-import Inbox from './pages/Inbox';
-import EmailCampaigns from './pages/EmailCampaigns';
-import Appearance from './pages/Appearance';
-import WhatsAppIntegrations from './pages/WhatsAppIntegrations';
-import WhatsAppTemplates from './pages/WhatsAppTemplates';
-import WhatsAppWorkflows from './pages/WhatsAppWorkflows';
-import WhatsAppCampaigns from './pages/WhatsAppCampaigns';
-import WhatsAppInbox from './pages/WhatsAppInbox';
-import WhatsAppAnalytics from './pages/WhatsAppAnalytics';
-import LeadSources from './pages/LeadSources';
-import UniversalList from './pages/universal/UniversalList';
-import UniversalDetail from './pages/universal/UniversalDetail';
-import UniversalKanban from './pages/universal/UniversalKanban';
+
+// Everything else is split per route. Each page becomes its own chunk that
+// is fetched the first time the user navigates to it, which keeps the
+// initial bundle to the shell plus the landing page. <Suspense> lives
+// inside Layout (around <Outlet/>), so the sidebar and header stay on
+// screen while a chunk loads instead of the whole app blanking.
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Leads = lazy(() => import('./pages/Leads'));
+const LeadDetail = lazy(() => import('./pages/LeadDetail'));
+const Payments = lazy(() => import('./pages/Payments'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Roles = lazy(() => import('./pages/Roles'));
+const Users = lazy(() => import('./pages/Users'));
+const Settings = lazy(() => import('./pages/Settings'));
+const SettingsModules = lazy(() => import('./pages/SettingsModules'));
+const FieldLayoutManager = lazy(() => import('./pages/FieldLayoutManager'));
+const SettingsWorkflows = lazy(() => import('./pages/SettingsWorkflows'));
+const SettingsPipelines = lazy(() => import('./pages/SettingsPipelines'));
+const SettingsTeams = lazy(() => import('./pages/SettingsTeams'));
+const SettingsData = lazy(() => import('./pages/SettingsData'));
+const SettingsFinance = lazy(() => import('./pages/SettingsFinance'));
+const CallReports = lazy(() => import('./pages/CallReports'));
+const Customer360 = lazy(() => import('./pages/Customer360'));
+const SettingsEmail = lazy(() => import('./pages/SettingsEmail'));
+const Inbox = lazy(() => import('./pages/Inbox'));
+const EmailCampaigns = lazy(() => import('./pages/EmailCampaigns'));
+const Appearance = lazy(() => import('./pages/Appearance'));
+const WhatsAppIntegrations = lazy(() => import('./pages/WhatsAppIntegrations'));
+const WhatsAppTemplates = lazy(() => import('./pages/WhatsAppTemplates'));
+const WhatsAppWorkflows = lazy(() => import('./pages/WhatsAppWorkflows'));
+const WhatsAppCampaigns = lazy(() => import('./pages/WhatsAppCampaigns'));
+const WhatsAppInbox = lazy(() => import('./pages/WhatsAppInbox'));
+const WhatsAppAnalytics = lazy(() => import('./pages/WhatsAppAnalytics'));
+const LeadSources = lazy(() => import('./pages/LeadSources'));
+const UniversalList = lazy(() => import('./pages/universal/UniversalList'));
+const UniversalDetail = lazy(() => import('./pages/universal/UniversalDetail'));
+const UniversalKanban = lazy(() => import('./pages/universal/UniversalKanban'));
 
 export default function App() {
   return (

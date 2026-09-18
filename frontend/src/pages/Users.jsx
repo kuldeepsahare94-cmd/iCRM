@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { Users as UsersIcon } from 'lucide-react';
+import { PageHeader } from '../components/ui';
 
 const empty = { username: '', password: '', full_name: '', role_id: '', active: true };
 
@@ -31,16 +33,17 @@ export default function Users() {
   const changeRole = async (u, role_id) => { await api.updateUser(u.id, { role_id: role_id || null }); load(); };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="t-page-title">Users</h1>
-          <p className="text-sm text-slate-500 mt-1">Team members and the role each one is assigned.</p>
-        </div>
-        <button onClick={() => setShowForm((s) => !s)} className="bg-ink text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-ink-light">
+    <div className="max-w-[1600px] mx-auto">
+      <PageHeader
+        title="Users"
+        subtitle="Team members and the role each one is assigned."
+        icon={UsersIcon}
+        accent="users"
+      >
+        <button onClick={() => setShowForm((s) => !s)} className="btn btn-primary">
           {showForm ? 'Cancel' : '+ Add user'}
         </button>
-      </div>
+      </PageHeader>
 
       {showForm && (
         <form onSubmit={submit} className="card p-5 mt-5 grid grid-cols-2 gap-4">

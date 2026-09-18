@@ -6,6 +6,7 @@ import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 import StatusBadge from '../components/StatusBadge';
 import { downloadCSV } from '../utils/csv';
+import { PageHeader } from '../components/ui';
 
 const STATUSES = ['Pending', 'Partial', 'Paid', 'Failed'];
 const MODES = ['Cash', 'UPI', 'Bank Transfer', 'Card', 'Cheque', 'Other'];
@@ -146,27 +147,23 @@ export default function Payments() {
 
   return (
     <div className="max-w-[1600px] mx-auto">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-soft text-amber flex items-center justify-center shrink-0">
-            <Wallet className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="t-page-title">Payments</h1>
-            <p className="text-sm text-slate-500 mt-1">Linked to an Account, Opportunity, or Quotation. Mark paid to unlock receipts.</p>
-          </div>
-        </div>
+      <PageHeader
+        title="Payments"
+        subtitle="Linked to an Account, Opportunity, or Quotation. Mark paid to unlock receipts."
+        icon={Wallet}
+        accent="payments"
+      >
         <div className="flex gap-2">
           {can('payments', 'export') && (
             <button onClick={() => downloadCSV('payments.csv', list)} className="btn btn-secondary">Export CSV</button>
           )}
           {can('payments', 'create') && (
-            <button onClick={() => setCreating(true)} className="bg-amber text-white text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 inline-flex items-center gap-1.5">
+            <button onClick={() => setCreating(true)} className="btn btn-primary inline-flex items-center gap-1.5">
               <Plus className="w-4 h-4" /> New payment
             </button>
           )}
         </div>
-      </div>
+      </PageHeader>
 
       {downloadError && (
         <div className="text-sm rounded-lg px-3 py-2 mt-4"

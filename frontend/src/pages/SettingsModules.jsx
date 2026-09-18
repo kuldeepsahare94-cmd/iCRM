@@ -3,6 +3,7 @@ import { Plus, Trash2, GripVertical, Eye, EyeOff, Pencil, Columns, LayoutGrid, B
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 import { ModuleIcon, ICON_OPTIONS } from '../components/moduleIcons';
+import { PageHeader } from '../components/ui';
 
 function IconPicker({ value, onChange }) {
   return (
@@ -457,20 +458,21 @@ export default function SettingsModules() {
 
   return (
     <div className="max-w-[1600px] mx-auto">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-amber-soft text-amber flex items-center justify-center shrink-0">
-          <Boxes className="w-5 h-5" />
+      <PageHeader
+        title="Modules & Fields"
+        subtitle="Create custom modules, add fields to any module, and control what shows where — no code required."
+        icon={Boxes}
+        accent="settings"
+      />
+      {/* min-w-0 on the grid items: a grid child defaults to min-width:auto,
+          so the fields table refused to shrink below its natural width and
+          pushed the whole page into horizontal scroll on a phone. */}
+      <div className="grid md:grid-cols-[320px_minmax(0,1fr)] gap-6 mt-6 items-start">
+        <div className="min-w-0">
+          <ModuleList modules={modules} selected={selected} onSelect={setSelected} onChanged={load} can={can} />
         </div>
-        <div>
-          <h1 className="t-page-title">Modules &amp; Fields</h1>
-          <p className="text-sm text-slate-500 mt-1">Create custom modules, add fields to any module, and control what shows where — no code required.</p>
-        </div>
-      </div>
-
-      <div className="grid md:grid-cols-[320px_1fr] gap-6 mt-6 items-start">
-        <ModuleList modules={modules} selected={selected} onSelect={setSelected} onChanged={load} can={can} />
         {selected && (
-          <div>
+          <div className="min-w-0">
             <div className="flex gap-1 mb-3">
               <button onClick={() => setRightTab('fields')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium ${rightTab === 'fields' ? 'bg-amber text-white' : 'bg-white border border-line text-slate-500 hover:bg-canvas'}`}>

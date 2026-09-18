@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { MessageCircle, Plus, CheckCircle2, XCircle, RefreshCw, Star, Trash2, X, FileText, Zap, Send, Inbox, BarChart3 } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
+import { PageHeader } from '../components/ui';
 
 const STATUS_STYLE = {
   Connected: 'bg-emerald-100 text-good',
@@ -118,17 +119,13 @@ export default function WhatsAppIntegrations() {
   const remove = async (p) => { if (confirm(`Remove "${p.name}"? This can't be undone.`)) { await api.waDeleteProvider(p.id); load(); } };
 
   return (
-    <div className="p-8 max-w-5xl">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-good flex items-center justify-center">
-            <MessageCircle className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>WhatsApp Integrations</h1>
-            <p className="text-sm text-slate-500 mt-1">Connect one or more WhatsApp Business Accounts across any supported provider.</p>
-          </div>
-        </div>
+    <div className="max-w-[1600px] mx-auto">
+      <PageHeader
+        title="WhatsApp Integrations"
+        subtitle="Connect one or more WhatsApp Business Accounts across any supported provider."
+        icon={MessageCircle}
+        accent="whatsapp"
+      >
         <div className="flex gap-2 flex-wrap">
           {can('whatsapp', 'view') && (
             <>
@@ -150,12 +147,12 @@ export default function WhatsAppIntegrations() {
             </>
           )}
           {can('whatsapp', 'create') && (
-            <button onClick={() => setShowConnect(true)} className="flex items-center gap-1.5 bg-ink text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-ink-light">
+            <button onClick={() => setShowConnect(true)} className="btn btn-primary inline-flex items-center gap-1.5">
               <Plus className="w-4 h-4" /> Connect Provider
             </button>
           )}
         </div>
-      </div>
+      </PageHeader>
 
       {toast && (
         <div className={`mt-4 text-sm rounded-lg px-4 py-2.5 flex items-center gap-2 ${toast.ok ? 'bg-emerald-50 text-good' : 'bg-red-50 text-warn'}`}>

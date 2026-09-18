@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { AlertCircle, Inbox, RefreshCw } from 'lucide-react';
+import { accentGradient } from '../theme/moduleAccents';
 
 /* ============================================================
    Shared UI primitives.
@@ -79,12 +80,33 @@ export function Avatar({ name, size = 'md' }) {
   );
 }
 
-export function PageHeader({ title, subtitle, children }) {
+// Standard page header.
+//
+// `icon` + `accent` give the page the same identity treatment the record
+// modules get on their list pages (gradient chip, module hue), so Settings,
+// WhatsApp, Reports and the rest stop reading as a different, plainer
+// product than Accounts or Leads. Both are optional: called with only a
+// title it renders exactly as before, so existing call sites are unaffected.
+//
+// `accent` is a key into MODULE_ACCENTS — a module api_name ('leads') or one
+// of the reserved area names ('whatsapp', 'settings', …). An unknown key
+// falls back to the brand colour rather than throwing.
+export function PageHeader({ title, subtitle, icon: Icon, accent, children }) {
   return (
     <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
-      <div>
-        <h1 className="t-page-title">{title}</h1>
-        {subtitle && <p className="t-page-sub mt-1">{subtitle}</p>}
+      <div className="flex items-start gap-3 min-w-0">
+        {Icon && (
+          <div
+            className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-white shadow-sm"
+            style={{ background: accentGradient(accent) }}
+          >
+            <Icon className="w-5 h-5" />
+          </div>
+        )}
+        <div className="min-w-0">
+          <h1 className="t-page-title">{title}</h1>
+          {subtitle && <p className="t-page-sub mt-1">{subtitle}</p>}
+        </div>
       </div>
       {children && <div className="flex items-center gap-2 flex-wrap">{children}</div>}
     </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Percent, Coins, Plus, Trash2, Star } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
+import { PageHeader } from '../components/ui';
 
 const inputClass = 'border border-line rounded-lg px-3 py-1.5 text-sm';
 
@@ -237,18 +238,14 @@ function CurrencySection({ can }) {
 export default function SettingsFinance() {
   const can = usePermissions();
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-amber-soft text-amber flex items-center justify-center shrink-0">
-          <Percent className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="t-page-title">Taxes &amp; Currencies</h1>
-          <p className="text-sm text-slate-500 mt-1">Tax rates for quotes and products, and the currencies you trade in.</p>
-        </div>
-      </div>
-
-      <TaxSection can={can} />
+    <div className="max-w-[1600px] mx-auto">
+      <PageHeader
+        title="Taxes & Currencies"
+        subtitle="Tax rates for quotes and products, and the currencies you trade in."
+        icon={Percent}
+        accent="payments"
+      />
+<TaxSection can={can} />
       <CurrencySection can={can} />
     </div>
   );

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Zap, Plus, X, Play, Pause, Trash2, AlertCircle, RefreshCw } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
+import { PageHeader } from '../components/ui';
 
 function WorkflowBuilderModal({ events, providers, templates, onClose, onSaved }) {
   const [name, setName] = useState('');
@@ -165,23 +166,19 @@ export default function WhatsAppWorkflows() {
   const eventLabel = (key) => events.find((e) => e.key === key)?.label || key;
 
   return (
-    <div className="p-8 max-w-5xl">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-good flex items-center justify-center">
-            <Zap className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>WhatsApp Workflows</h1>
-            <p className="text-sm text-slate-500 mt-1">Automatically message people when something happens in the CRM.</p>
-          </div>
-        </div>
+    <div className="max-w-[1600px] mx-auto">
+      <PageHeader
+        title="WhatsApp Workflows"
+        subtitle="Automatically message people when something happens in the CRM."
+        icon={Zap}
+        accent="whatsapp"
+      >
         {can('whatsapp', 'create') && (
-          <button onClick={() => setShowBuilder(true)} className="flex items-center gap-1.5 bg-ink text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-ink-light">
+          <button onClick={() => setShowBuilder(true)} className="btn btn-primary inline-flex items-center gap-1.5">
             <Plus className="w-4 h-4" /> New Workflow
           </button>
         )}
-      </div>
+      </PageHeader>
 
       <div className="bg-amber-soft rounded-xl p-4 mt-5 flex items-center justify-between flex-wrap gap-3">
         <p className="text-xs text-slate-600">

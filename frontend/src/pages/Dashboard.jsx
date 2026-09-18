@@ -1,13 +1,33 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-} from 'recharts';
 import {
   Users, TrendingUp, CalendarClock, IndianRupee, Target, CheckCircle2, Trophy,
   AlertTriangle, Phone, PhoneCall, CheckSquare, Send, ArrowRight,
 } from 'lucide-react';
 import { api } from '../api';
+// recharts is heavy, so the charts load as a separate chunk after the rest
+// of the Dashboard has painted. See DashboardCharts.jsx.
+const StageDonut = lazy(() => import('./DashboardCharts').then((m) => ({ default: m.StageDonut })));
+const RevenueArea = lazy(() => import('./DashboardCharts').then((m) => ({ default: m.RevenueArea })));
+
+// Holds the chart's footprint while its chunk arrives, so the cards around
+// it don't jump once it renders.
+function ChartFrame({ height, children }) {
+  return (
+    <Suspense
+      fallback={(
+        <div
+          className="w-full rounded-xl bg-slate-100/70 dark:bg-slate-700/30 animate-pulse"
+          style={{ height }}
+          aria-busy="true"
+        />
+      )}
+    >
+      {children}
+    </Suspense>
+  );
+}
+
 import { friendlyError, Badge } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 
@@ -29,7 +49,6 @@ const COLORS = {
 // Fixed stage-colour palette used only when a pipeline stage has no colour
 // configured in Settings — matches the reference donut's blue/pink/purple/
 // teal/amber sequence.
-const STAGE_FALLBACK = ['#3B82F6', '#EC4899', '#8B5CF6', '#14B8A6', '#F59E0B', '#10B981', '#F43F5E'];
 const TONE_TO_COLOR = { success: 'emerald', danger: 'rose', warning: 'amber', info: 'blue', special: 'indigo', neutral: 'teal' };
 
 function KpiCard({ label, value, sub, trend, icon: Icon, color, tone, to }) {
@@ -146,55 +165,6 @@ function AgendaCard({ title, icon: Icon, iconTone, items, render, empty, action,
       ) : (
         <div className="space-y-1">{list.map((item, i) => <AgendaRow key={i} item={item} render={render} />)}</div>
       )}
-    </div>
-  );
-}
-
-// Pipeline-by-stage donut, using each stage's OWN colour from the pipeline
-// configuration (module_pipeline_stages.color) rather than a fixed palette
-// — a stage renamed or recoloured in Settings → Pipelines is reflected here
-// automatically.
-function StageDonut({ stages }) {
-  const total = stages.reduce((s, x) => s + (x.c || 0), 0);
-  const data = stages.filter((s) => s.c > 0);
-  const colourOf = (s, i) => s.color || STAGE_FALLBACK[i % STAGE_FALLBACK.length];
-  return (
-    <div className="flex items-center gap-6 flex-wrap">
-      <div className="relative w-[168px] h-[168px] shrink-0">
-        {total === 0 ? (
-          <div className="w-[168px] h-[168px] rounded-full border-[10px] border-[var(--color-line)] flex items-center justify-center">
-            <span className="t-meta">No deals</span>
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={data} dataKey="c" nameKey="stage" innerRadius={56} outerRadius={82} paddingAngle={3} strokeWidth={0} cornerRadius={4}>
-                {data.map((s, i) => <Cell key={i} fill={colourOf(s, i)} />)}
-              </Pie>
-              <Tooltip formatter={(v, n, p) => [`${v} deal(s) · ${inr(p.payload.total)}`, p.payload.stage]}
-                contentStyle={{ borderRadius: 10, border: '1px solid var(--color-line)', fontSize: 12 }} />
-            </PieChart>
-          </ResponsiveContainer>
-        )}
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-[28px] font-bold text-ink leading-none">{total}</span>
-          <span className="t-meta mt-1">Total Leads</span>
-        </div>
-      </div>
-      <div className="flex-1 min-w-[170px] space-y-2.5">
-        {stages.map((s, i) => (
-          <div key={s.stage} className="flex items-center justify-between text-sm gap-2">
-            <span className="flex items-center gap-2 min-w-0">
-              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: colourOf(s, i) }} />
-              <span className="text-ink truncate">{s.stage}</span>
-            </span>
-            <span className="text-[var(--color-muted)] shrink-0 font-medium">
-              {s.c} {total > 0 && <span className="text-xs font-normal">({Math.round((s.c / total) * 100)}%)</span>}
-            </span>
-          </div>
-        ))}
-        {stages.length === 0 && <p className="t-meta">No pipeline configured.</p>}
-      </div>
     </div>
   );
 }
@@ -335,7 +305,9 @@ function CrmDashboardSection({ data }) {
             <Link to="/records/opportunities/kanban" className="t-meta">View details →</Link>
           </div>
           <p className="text-xs text-slate-400 mb-4">Deal count and value per pipeline stage</p>
-          <StageDonut stages={data.opportunities_by_stage} />
+          <ChartFrame height={168}>
+            <StageDonut stages={data.opportunities_by_stage} />
+          </ChartFrame>
         </div>
 
         <div className="card p-5 lg:col-span-1">
@@ -344,22 +316,9 @@ function CrmDashboardSection({ data }) {
             <Link to="/records/subscriptions" className="t-meta">View details →</Link>
           </div>
           <p className="text-xs text-slate-400 mb-4">Subscription payments collected, last 6 months</p>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={data.revenue_by_month}>
-              <defs>
-                <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#4F46E5" stopOpacity={0.28} />
-                  <stop offset="100%" stopColor="#4F46E5" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-line)" vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`} />
-              <Tooltip formatter={(v) => inr(v)} />
-              <Area type="monotone" dataKey="revenue" stroke="#4F46E5" strokeWidth={2.5} fill="url(#revenueFill)"
-                dot={{ fill: '#4F46E5', r: 4, strokeWidth: 0 }} activeDot={{ r: 6 }} />
-            </AreaChart>
-          </ResponsiveContainer>
+          <ChartFrame height={220}>
+            <RevenueArea data={data.revenue_by_month} />
+          </ChartFrame>
         </div>
 
         <div className="card p-5 lg:col-span-1">

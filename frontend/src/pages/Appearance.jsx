@@ -1,22 +1,18 @@
 import { Check, Palette, Moon, Sun } from 'lucide-react';
 import { THEMES, useTheme } from '../context/ThemeContext';
+import { PageHeader } from '../components/ui';
 
 export default function Appearance() {
   const { theme, setTheme, dark, setDark } = useTheme();
 
   return (
-    <div className="p-8 max-w-3xl">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-amber-soft text-amber flex items-center justify-center">
-          <Palette className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>
-            Appearance
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">Pick a theme — changes apply instantly, saved on this device.</p>
-        </div>
-      </div>
+    <div className="max-w-[1600px] mx-auto">
+      <PageHeader
+        title="Appearance"
+        subtitle="Pick a theme — changes apply instantly, saved on this device."
+        icon={Palette}
+        accent="settings"
+      />
 
       <div className="bg-white border border-line rounded-xl p-4 mt-6 flex items-center justify-between">
         <div className="flex items-center gap-3">

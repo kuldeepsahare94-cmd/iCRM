@@ -4,6 +4,7 @@ import { Send, Plus, X, Users, Clock } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 import StatusBadge from '../components/StatusBadge';
+import { PageHeader } from '../components/ui';
 
 // Audiences available in this CRM. The education audiences (students,
 // parents) went with those modules — §25.
@@ -241,23 +242,19 @@ export default function WhatsAppCampaigns() {
   }, []);
 
   return (
-    <div className="p-8 max-w-5xl">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-good flex items-center justify-center">
-            <Send className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>Bulk WhatsApp Campaigns</h1>
-            <p className="text-sm text-slate-500 mt-1">Send personalised, approved-template messages to filtered recipient lists.</p>
-          </div>
-        </div>
+    <div className="max-w-[1600px] mx-auto">
+      <PageHeader
+        title="Bulk WhatsApp Campaigns"
+        subtitle="Send personalised, approved-template messages to filtered recipient lists."
+        icon={Send}
+        accent="whatsapp"
+      >
         {can('whatsapp', 'create') && (
-          <button onClick={() => setShowBuilder(true)} className="flex items-center gap-1.5 bg-ink text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-ink-light">
+          <button onClick={() => setShowBuilder(true)} className="btn btn-primary inline-flex items-center gap-1.5">
             <Plus className="w-4 h-4" /> New Campaign
           </button>
         )}
-      </div>
+      </PageHeader>
 
       <div className="bg-white border border-line rounded-xl mt-6 overflow-hidden overflow-x-auto">
         <table className="w-full text-sm">

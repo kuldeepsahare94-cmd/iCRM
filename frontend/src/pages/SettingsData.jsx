@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Database, History, Download, Upload, FileText } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
+import { PageHeader } from '../components/ui';
 
 const inputClass = 'border border-line rounded-lg px-3 py-1.5 text-sm';
 
@@ -193,18 +194,14 @@ export default function SettingsData() {
   if (loading) return <div className="py-8 t-meta">Loading…</div>;
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-amber-soft text-amber flex items-center justify-center shrink-0">
-          <Database className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="t-page-title">Data &amp; Audit</h1>
-          <p className="text-sm text-slate-500 mt-1">Bulk import/export, and a record of who changed what.</p>
-        </div>
-      </div>
-
-      {can('settings', 'edit') && <ImportExportSection modules={modules} />}
+    <div className="max-w-[1600px] mx-auto">
+      <PageHeader
+        title="Data & Audit"
+        subtitle="Bulk import/export, and a record of who changed what."
+        icon={Database}
+        accent="documents"
+      />
+{can('settings', 'edit') && <ImportExportSection modules={modules} />}
       {can('settings', 'view') && <AuditSection modules={modules} />}
     </div>
   );

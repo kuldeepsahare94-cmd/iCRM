@@ -184,7 +184,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto">
+    <div className="max-w-[1600px] mx-auto">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-amber-soft text-amber flex items-center justify-center">
           <SettingsIcon className="w-5 h-5" />

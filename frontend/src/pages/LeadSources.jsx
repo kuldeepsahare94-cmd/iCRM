@@ -3,6 +3,7 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Radio, Plus, X, Code2, Trash2, RefreshCw, Copy, Check, ExternalLink, Share2, ChevronRight, AlertCircle } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
+import { PageHeader } from '../components/ui';
 
 const TYPE_ICON_HINT = {
   website_form: 'Paste a code snippet into your website',
@@ -338,23 +339,19 @@ export default function LeadSources() {
   const remove = async (s) => { if (confirm(`Delete "${s.name}"?`)) { await api.deleteLeadSource(s.id); load(); } };
 
   return (
-    <div className="max-w-[1400px] mx-auto">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
-            <Radio className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="t-page-title">Lead Sources</h1>
-            <p className="text-sm text-slate-500 mt-1">Website forms, landing pages, and social ad platforms — plugged straight into your Leads pipeline.</p>
-          </div>
-        </div>
+    <div className="max-w-[1600px] mx-auto">
+      <PageHeader
+        title="Lead Sources"
+        subtitle="Website forms, landing pages, and social ad platforms — plugged straight into your Leads pipeline."
+        icon={Radio}
+        accent="sources"
+      >
         {can('lead_sources', 'create') && (
-          <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 bg-ink text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-ink-light">
+          <button onClick={() => setShowCreate(true)} className="btn btn-primary inline-flex items-center gap-1.5">
             <Plus className="w-4 h-4" /> New Source
           </button>
         )}
-      </div>
+      </PageHeader>
 
       {fbToast && (
         <div className={`mt-4 text-sm rounded-lg px-4 py-2.5 flex items-center gap-2 ${fbToast.ok ? 'bg-emerald-50 text-good' : 'bg-red-50 text-warn'}`}>

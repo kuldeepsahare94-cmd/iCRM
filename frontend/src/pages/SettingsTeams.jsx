@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Users2, Plus, Trash2, Pencil, X } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
+import { PageHeader } from '../components/ui';
 
 const inputClass = 'border border-line rounded-lg px-3 py-1.5 text-sm';
 
@@ -114,23 +115,19 @@ export default function SettingsTeams() {
   if (loading) return <div className="py-8 t-meta">Loading…</div>;
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
-            <Users2 className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="t-page-title">Teams</h1>
-            <p className="text-sm text-slate-500 mt-1">Group users into teams so records can be assigned to a team, not just an individual.</p>
-          </div>
-        </div>
+    <div className="max-w-[1600px] mx-auto">
+      <PageHeader
+        title="Teams"
+        subtitle="Group users into teams so records can be assigned to a team, not just an individual."
+        icon={Users2}
+        accent="users"
+      >
         {can('teams', 'create') && !editing && (
-          <button onClick={startNew} className="bg-amber text-white text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 inline-flex items-center gap-1.5">
+          <button onClick={startNew} className="btn btn-primary inline-flex items-center gap-1.5">
             <Plus className="w-4 h-4" /> New team
           </button>
         )}
-      </div>
+      </PageHeader>
 
       {editing && (
         <div className="mt-6">

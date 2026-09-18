@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BarChart3, Send, CheckCheck, Eye, XCircle, MessageSquare, UserX, Clock } from 'lucide-react';
 import { api } from '../api';
+import { PageHeader } from '../components/ui';
 
 function Card({ label, value, icon: Icon, accent }) {
   return (
@@ -36,17 +37,13 @@ export default function WhatsAppAnalytics() {
   const t = data.totals;
 
   return (
-    <div className="p-8 max-w-5xl">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-good flex items-center justify-center">
-          <BarChart3 className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>WhatsApp Analytics</h1>
-          <p className="text-sm text-slate-500 mt-1">Combined outcomes from campaigns and automated workflows.</p>
-        </div>
-      </div>
-
+    <div className="max-w-[1600px] mx-auto">
+      <PageHeader
+        title="WhatsApp Analytics"
+        subtitle="Combined outcomes from campaigns and automated workflows."
+        icon={BarChart3}
+        accent="whatsapp"
+      />
       <div className="flex gap-2 mt-5 flex-wrap">
         <select value={providerId} onChange={(e) => setProviderId(e.target.value)} className="border border-line rounded-lg px-3 py-1.5 text-xs">
           <option value="">All providers</option>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FileText, Image as ImageIcon, Video, File } from 'lucide-react';
 import { api } from '../api';
+import { PageHeader } from '../components/ui';
 
 const CATEGORIES = ['MARKETING', 'UTILITY', 'AUTHENTICATION'];
 const CATEGORY_LABEL = { MARKETING: 'Marketing', UTILITY: 'Utility', AUTHENTICATION: 'Authentication' };
@@ -42,18 +43,14 @@ export default function WhatsAppTemplates() {
   useEffect(() => { api.waListProviders().then(setProviders); }, []);
 
   return (
-    <div className="p-8 max-w-5xl">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-good flex items-center justify-center">
-          <FileText className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>WhatsApp Templates</h1>
-          <p className="text-sm text-slate-500 mt-1">Synced automatically from each connected provider. Use the Sync button on the Integrations page to refresh.</p>
-        </div>
-      </div>
-
-      <select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} className="border border-line rounded-lg px-3 py-2 text-sm mt-5">
+    <div className="max-w-[1600px] mx-auto">
+      <PageHeader
+        title="WhatsApp Templates"
+        subtitle="Synced automatically from each connected provider. Use the Sync button on the Integrations page to refresh."
+        icon={FileText}
+        accent="whatsapp"
+      />
+<select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} className="border border-line rounded-lg px-3 py-2 text-sm mt-5">
         <option value="">All providers</option>
         {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>

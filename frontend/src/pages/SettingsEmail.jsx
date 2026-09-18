@@ -237,8 +237,8 @@ export default function SettingsEmail() {
   if (loading) return <div className="py-8 t-meta">Loading…</div>;
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <PageHeader title="Email"
+    <div className="max-w-[1600px] mx-auto">
+      <PageHeader title="Email" icon={Mail} accent="emails"
         subtitle="Configure the mailbox this CRM sends from — for the whole organisation, or per user." />
 
       <div className="card p-4 mb-5">

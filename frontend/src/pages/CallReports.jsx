@@ -40,8 +40,9 @@ export default function CallReports() {
   const f = data?.follow_ups;
 
   return (
-    <div className="max-w-[1400px] mx-auto">
-      <PageHeader title="Call Reports" subtitle="Call volume, talk time and disposition breakdown">
+    <div className="max-w-[1600px] mx-auto">
+      <PageHeader title="Call Reports" icon={PhoneCall} accent="calls"
+        subtitle="Call volume, talk time and disposition breakdown">
         {PRESETS.map((p) => (
           <button key={p.label} onClick={() => applyPreset(p)}
             className={`btn ${activePreset?.label === p.label ? 'btn-primary' : 'btn-secondary'}`}>

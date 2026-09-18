@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { api } from '../api';
+import { PageHeader } from '../components/ui';
 
 // Modules that actually exist in this CRM. The education-era entries
 // (students/courses/admissions/companies/placements) were removed, so
@@ -66,16 +67,13 @@ export default function Roles() {
   const activeRole = roles.find((r) => r.id === activeRoleId);
 
   return (
-    <div className="max-w-[1400px] mx-auto">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-amber-soft text-amber flex items-center justify-center">
-          <ShieldCheck className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="t-page-title">Roles &amp; Permissions</h1>
-          <p className="text-sm text-slate-500 mt-1">Module-wise View / Create / Edit / Delete / Export access per role.</p>
-        </div>
-      </div>
+    <div className="max-w-[1600px] mx-auto">
+      <PageHeader
+        title="Roles & Permissions"
+        subtitle="Module-wise View / Create / Edit / Delete / Export access per role."
+        icon={ShieldCheck}
+        accent="roles"
+      />
 
       <div className="flex gap-2 mt-6 flex-wrap items-center">
         {roles.map((r) => (

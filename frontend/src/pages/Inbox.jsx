@@ -282,7 +282,8 @@ export default function Inbox() {
 
   return (
     <div className="max-w-[1600px] mx-auto">
-      <PageHeader title="Inbox" subtitle="Email received into the CRM, linked to the right customer record">
+      <PageHeader title="Inbox" icon={InboxIcon} accent="inbox"
+        subtitle="Email received into the CRM, linked to the right customer record">
         <button onClick={sync} disabled={syncing} className="btn btn-primary disabled:opacity-50">
           <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} /> {syncing ? 'Checking…' : 'Check for new mail'}
         </button>
