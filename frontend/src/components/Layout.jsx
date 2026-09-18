@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import GlobalSearch from './GlobalSearch';
 import NotificationBell from './NotificationBell';
+import ChatWidget from './ChatWidget';
 import AssistantWidget from './AssistantWidget';
 import { ModuleIcon } from './moduleIcons';
 import { accentFor } from '../theme/moduleAccents';
@@ -277,6 +278,7 @@ export default function Layout() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              <ChatWidget />
               <NotificationBell />
               <button aria-label="Quick create" title="Quick create"
                 onClick={() => navigate('/leads')}

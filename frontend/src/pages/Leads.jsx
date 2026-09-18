@@ -54,7 +54,7 @@ const relative = (iso) => {
 };
 
 const empty = {
-  student_name: '', mobile: '', alternate_mobile: '', email: '', gender: '', date_of_birth: '',
+  student_name: '', account_name: '', mobile: '', alternate_mobile: '', email: '', gender: '', date_of_birth: '',
   address: '', city: '', qualification: '', source: '', status: 'New', follow_up_date: '',
   assigned_counselor: '', remarks: '', lead_rating: '', product_interest: '',
 };
@@ -332,6 +332,10 @@ function AddLeadModal({ initialStatus, sources, onClose, onSaved }) {
             <h3 className="t-meta font-semibold uppercase tracking-wide mb-2">Personal</h3>
             <div className="grid sm:grid-cols-2 gap-3">
               {field('Name', 'student_name', { required: true, placeholder: 'Full name' })}
+              {/* Converting a lead creates an Account, and an Account is the
+                  ORGANISATION. Without this the conversion had nothing to
+                  name it after and used the person's name instead. */}
+              {field('Company / Account Name', 'account_name', { placeholder: 'e.g. Smart Business Solution' })}
               {field('City', 'city')}
             </div>
           </section>

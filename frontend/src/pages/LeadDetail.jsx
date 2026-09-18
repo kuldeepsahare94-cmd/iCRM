@@ -34,6 +34,87 @@ const PAGE_TABS = [
   { key: 'notes', label: 'Notes', icon: StickyNote },
 ];
 
+// Converting a lead creates an ACCOUNT, which is an organisation — a
+// different thing from the lead's own name. The old flow was a bare
+// confirm() that sent no account name at all, so the backend fell back to
+// the person's name and every converted account was called "Adarsh Kashyap"
+// instead of "Smart Business Solution". This asks, pre-filled from whatever
+// company field the lead actually has.
+function ConvertLeadModal({ lead, onClose, onConverted }) {
+  const companyOnLead = lead.account_name || lead.company_name || lead.company || '';
+  const [accountName, setAccountName] = useState(companyOnLead);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const personName = (lead.student_name || '').trim();
+  const looksLikePerson = accountName.trim() && accountName.trim().toLowerCase() === personName.toLowerCase();
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const name = accountName.trim();
+    if (!name) { setError('Account name is required.'); return; }
+    setSaving(true); setError('');
+    try {
+      onConverted(await api.convertLead(lead.id, { account_name: name }));
+    } catch (err) {
+      let msg = err.message;
+      try { msg = JSON.parse(err.message).error || msg; } catch { /* plain message */ }
+      setError(msg);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <form onSubmit={submit} className="bg-white rounded-xl p-5 w-full max-w-md relative">
+        <button type="button" onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-ink">
+          <X className="w-4 h-4" />
+        </button>
+        <h2 className="text-sm font-semibold text-ink mb-1">Convert lead</h2>
+        <p className="text-xs text-slate-500 mb-4">
+          Creates a Contact for <strong className="text-ink">{personName}</strong>, an Account for their
+          company, and an Opportunity linking the two.
+        </p>
+
+        <label className="text-xs font-medium text-slate-500 block mb-1">
+          Account / customer name <span className="text-warn">*</span>
+        </label>
+        <input
+          autoFocus
+          required
+          value={accountName}
+          onChange={(e) => { setAccountName(e.target.value); setError(''); }}
+          placeholder="e.g. Smart Business Solution"
+          className="border border-line rounded-lg px-3 py-2 text-sm w-full"
+        />
+        <p className="text-xs text-slate-400 mt-1">
+          {companyOnLead
+            ? 'Taken from the company on this lead — edit it if it is wrong.'
+            : 'This lead has no company recorded, so enter the organisation name.'}
+        </p>
+
+        {looksLikePerson && (
+          <p className="text-xs text-warn bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+            That is the same as the contact&apos;s own name. An Account is the company — if
+            {' '}{personName} is a sole trader that is fine, otherwise use the business name.
+          </p>
+        )}
+
+        {error && (
+          <p className="text-xs text-warn bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">{error}</p>
+        )}
+
+        <div className="flex gap-2 mt-4">
+          <button type="button" onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
+          <button type="submit" disabled={saving || !accountName.trim()} className="btn btn-primary flex-1 disabled:opacity-50">
+            {saving ? 'Converting…' : 'Convert lead'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function initialsOf(name) {
   return (name || '?').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 }
@@ -225,6 +306,7 @@ export default function LeadDetail() {
   const [lead, setLead] = useState(null);
   const [disposing, setDisposing] = useState(false);
   const [waOpen, setWaOpen] = useState(false);
+  const [converting, setConverting] = useState(false);
   const [pageTab, setPageTab] = useState('overview');
   const [tab, setTab] = useState('note');
   const [note, setNote] = useState('');
@@ -267,11 +349,10 @@ export default function LeadDetail() {
     load();
   };
 
-  const convert = async () => {
-    if (!confirm(`Convert ${lead.student_name} to a Contact, Account, and Opportunity?`)) return;
-    const res = await api.convertLead(id);
-    navigate(`/records/contacts/${res.contact_id}`);
-  };
+  // Conversion needs the COMPANY name, which is a different thing from the
+  // lead's own name — so it asks, rather than silently defaulting. It used to
+  // name every Account after the person.
+  const convert = () => setConverting(true);
 
   const runQuickAction = (key) => {
     if (key === 'call') return setDisposing(true);
@@ -697,6 +778,14 @@ export default function LeadDetail() {
       {pageTab === 'deals' && <div className="card p-4"><DealsTab lead={lead} /></div>}
       {pageTab === 'documents' && <div className="card p-4"><DocumentsTab leadId={id} /></div>}
       {pageTab === 'notes' && <div className="card p-4"><NotesTab leadId={id} /></div>}
+
+      {converting && (
+        <ConvertLeadModal
+          lead={lead}
+          onClose={() => setConverting(false)}
+          onConverted={(res) => { setConverting(false); navigate(`/records/contacts/${res.contact_id}`); }}
+        />
+      )}
 
       {disposing && (
         <DisposeLeadModal lead={lead} onClose={() => setDisposing(false)}

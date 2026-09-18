@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Settings as SettingsIcon, Plus, Trash2, Sparkles, Database, ShieldCheck, Boxes, Zap, GitBranch, Users2, History, Percent, Mail, LayoutList } from 'lucide-react';
+import { Settings as SettingsIcon, Plus, Trash2, Sparkles, Database, ShieldCheck, Boxes, Zap, GitBranch, Users2, History, Percent, Mail, LayoutList, Check, AlertTriangle } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 
@@ -158,6 +158,35 @@ export default function Settings() {
   const [downloading, setDownloading] = useState(false);
   const [emailingBackup, setEmailingBackup] = useState(false);
   const [backupResult, setBackupResult] = useState(null);
+  const [storage, setStorage] = useState(null);
+  const [restoring, setRestoring] = useState(false);
+
+  // Tells the admin whether data actually survives a redeploy, rather than
+  // leaving them to find out the hard way after one.
+  useEffect(() => { api.backupStatus().then(setStorage).catch(() => {}); }, []);
+
+  const restoreBackup = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';                 // let the same file be picked again
+    if (!file) return;
+    if (!window.confirm(
+      `Restore from "${file.name}"?\n\n`
+      + 'This replaces the current database when the backend next restarts. '
+      + 'The database being replaced is kept as a dated copy, so this can be undone.',
+    )) return;
+
+    setRestoring(true);
+    setBackupResult(null);
+    try {
+      const res = await api.restoreBackup(file);
+      setBackupResult({ ok: true, message: res.message });
+      api.backupStatus().then(setStorage).catch(() => {});
+    } catch (err) {
+      setBackupResult({ ok: false, message: err.message });
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const downloadBackup = async () => {
     setDownloading(true);
@@ -370,17 +399,52 @@ export default function Settings() {
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-ink">Database Backup</h2>
+              <h2 className="text-sm font-semibold text-ink">Database Backup &amp; Restore</h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                A safety net, not a fix — if you're on a hosting plan without a persistent disk (e.g. Render's free tier),
-                your data resets on every restart regardless of backups. Download or email yourself a copy before any risky change.
+                Download or email yourself a copy before any risky change, and restore from one if something goes wrong.
               </p>
             </div>
           </div>
+
+          {/* Storage health. The single most useful thing to show here: on a
+              host without a persistent disk, the database is wiped on every
+              restart and no amount of backing up changes that. */}
+          {storage && (
+            <div className={`text-xs rounded-lg px-3 py-2.5 mb-3 flex items-start gap-2 ${
+              storage.persistent ? 'bg-emerald-50 text-good' : 'bg-amber-50 text-warn'
+            }`}>
+              {storage.persistent
+                ? <Check className="w-4 h-4 shrink-0 mt-px" />
+                : <AlertTriangle className="w-4 h-4 shrink-0 mt-px" />}
+              <span>
+                {storage.persistent ? (
+                  <>
+                    <strong>Storage is persistent.</strong> Data is stored outside the application
+                    folder ({storage.data_dir}), so it survives restarts and redeploys.
+                    Database size {storage.size_mb} MB.
+                  </>
+                ) : (
+                  <>
+                    <strong>Storage is not persistent.</strong> The database is inside the application
+                    folder, so a redeploy or restart will wipe it. Set the <code>DATA_DIR</code>{' '}
+                    environment variable to a mounted disk on your host. Until then, download a backup
+                    before every deploy. Database size {storage.size_mb} MB.
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+
+          {storage?.restore_pending && (
+            <p className="text-xs bg-blue-50 text-blue-700 rounded-lg px-3 py-2.5 mb-3">
+              A restore is staged and will be applied the next time the backend restarts.
+            </p>
+          )}
+
           {backupResult && (
             <p className={`text-xs mb-3 ${backupResult.ok ? 'text-good' : 'text-warn'}`}>{backupResult.message}</p>
           )}
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button onClick={downloadBackup} disabled={downloading}
               className="border border-line text-sm font-medium px-4 py-2 rounded-lg hover:bg-canvas disabled:opacity-60">
               {downloading ? 'Downloading…' : 'Download Backup Now'}
@@ -389,6 +453,10 @@ export default function Settings() {
               className="border border-line text-sm font-medium px-4 py-2 rounded-lg hover:bg-canvas disabled:opacity-60">
               {emailingBackup ? 'Sending…' : 'Email Backup to Myself'}
             </button>
+            <label className={`border border-line text-sm font-medium px-4 py-2 rounded-lg hover:bg-canvas cursor-pointer ${restoring ? 'opacity-60 pointer-events-none' : ''}`}>
+              {restoring ? 'Checking…' : 'Restore from Backup…'}
+              <input type="file" accept=".db" className="hidden" onChange={restoreBackup} disabled={restoring} />
+            </label>
           </div>
         </div>
       )}

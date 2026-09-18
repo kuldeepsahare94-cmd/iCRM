@@ -12,6 +12,10 @@ function ImportExportSection({ modules }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  // When on, headers the module doesn't have yet become new fields instead
+  // of rejecting the file. On by default because that is almost always what
+  // someone importing an export from another CRM wants.
+  const [autoCreate, setAutoCreate] = useState(true);
 
   const onFile = (e) => {
     const file = e.target.files?.[0];
@@ -26,7 +30,7 @@ function ImportExportSection({ modules }) {
     if (!selected || !csv.trim()) return;
     setBusy(true); setResult(null); setError(null);
     try {
-      const r = await api.importCsv(selected, csv, dryRun);
+      const r = await api.importCsv(selected, csv, dryRun, autoCreate);
       setResult(r);
     } catch (err) {
       // The backend returns structured validation detail — surface it rather
@@ -68,6 +72,16 @@ function ImportExportSection({ modules }) {
             placeholder="Paste CSV here, or choose a file above. First row must be column headers."
             className="border border-line rounded-lg px-3 py-2 text-xs w-full font-mono" />
 
+          <label className="flex items-start gap-2 mt-3 text-xs text-slate-600 cursor-pointer">
+            <input type="checkbox" checked={autoCreate} onChange={(e) => { setAutoCreate(e.target.checked); setResult(null); setError(null); }}
+              className="mt-0.5 w-3.5 h-3.5" />
+            <span>
+              <strong className="text-ink">Create missing fields automatically</strong> — columns this module
+              doesn't have yet become new fields, with the type worked out from the data. Headers that mean the
+              same as an existing field (e.g. "Email Address" → Email) are matched to it instead of duplicated.
+            </span>
+          </label>
+
           <div className="flex gap-2 mt-3">
             <button onClick={() => run(true)} disabled={busy || !csv.trim()}
               className="border border-line text-sm font-medium px-4 py-2 rounded-lg hover:bg-canvas disabled:opacity-50">
@@ -80,10 +94,53 @@ function ImportExportSection({ modules }) {
           </div>
 
           {result && (
-            <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mt-3">
-              {result.dry_run
-                ? `Looks good — ${result.would_import} row(s) would be imported using: ${result.columns.join(', ')}`
-                : `Imported ${result.imported} row(s).`}
+            <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mt-3 space-y-2">
+              <div className="font-medium">
+                {result.dry_run
+                  ? `Looks good — ${result.would_import} row(s) would be imported.`
+                  : `Imported ${result.imported} row(s).`}
+              </div>
+
+              {(result.fields_created?.length > 0 || result.create?.length > 0) && (
+                <div>
+                  <div className="font-medium">
+                    {result.dry_run ? 'Fields that would be created:' : 'New fields created:'}
+                  </div>
+                  <ul className="list-disc list-inside mt-0.5">
+                    {(result.fields_created || result.create).map((f) => (
+                      <li key={f.api_name || f.column}>
+                        {f.label} <span className="opacity-70">({f.field_type})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {(result.mapped_to_existing?.length > 0 || result.mapped?.length > 0) && (
+                <div>
+                  <div className="font-medium">Matched to fields you already have:</div>
+                  <ul className="list-disc list-inside mt-0.5">
+                    {(result.mapped_to_existing || result.mapped).map((m) => (
+                      <li key={m.header}>{m.header} → {m.field || m.column}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {result.skipped?.length > 0 && (
+                <div>
+                  <div className="font-medium">Ignored:</div>
+                  <ul className="list-disc list-inside mt-0.5">
+                    {result.skipped.map((sk, i) => <li key={i}>{sk.header} — {sk.reason}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              {result.display_name_filled_from && (
+                <div className="opacity-80">
+                  Record names were built from {result.display_name_filled_from.join(' + ')}.
+                </div>
+              )}
             </div>
           )}
 
