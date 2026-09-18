@@ -3,7 +3,18 @@ const router = express.Router();
 const db = require('../db');
 const { requirePermission } = require('../middleware/auth');
 
-const MODULES = ['leads', 'students', 'courses', 'admissions', 'payments', 'companies', 'placements', 'reports', 'users', 'settings', 'assistant', 'whatsapp', 'lead_sources'];
+// The modules a NEWLY CREATED role gets permission rows for.
+//
+// This list had been left at the education-era set — students, courses,
+// admissions, companies, placements — long after those modules were removed.
+// The effect was that creating a new role produced rows for modules that no
+// longer exist and NO rows for most modules that do, so a user in a new role
+// found half the CRM missing. It is now the real module list, and it must be
+// kept in step with the matrix in frontend/src/pages/Roles.jsx.
+const MODULES = ['leads', 'accounts', 'contacts', 'opportunities', 'quotations', 'products',
+  'subscriptions', 'tickets', 'calls', 'meetings', 'tasks', 'notes', 'emails', 'payments',
+  'documents', 'teams', 'workflows', 'reports', 'users', 'chat', 'calendar', 'settings',
+  'assistant', 'whatsapp', 'lead_sources'];
 
 router.get('/', requirePermission('users', 'view'), (req, res) => {
   const roles = db.prepare('SELECT * FROM roles ORDER BY id').all();
