@@ -34,17 +34,55 @@ const path = require('path');
 // backend/ — the legacy location, and the local-dev default.
 const LEGACY_DIR = __dirname;
 
-const DATA_DIR = process.env.DATA_DIR
+const REQUESTED_DIR = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
   : LEGACY_DIR;
 
+// Can we actually create and write there?
+//
+// An earlier version created the directory and let any error throw, on the
+// reasoning that a missing disk should fail loudly. That was wrong: it takes
+// the whole CRM down. Setting DATA_DIR=/var/data on a plan with no persistent
+// disk — Render's free tier, for instance — means the path cannot be created,
+// and the app refused to boot at all.
+//
+// Failing to start is worse than running without persistence. A CRM that runs
+// and says clearly that its storage is temporary is usable; one that will not
+// start is not. The warning below is loud, and Settings -> Database Backup
+// shows an orange "storage is not persistent" banner, so this cannot pass
+// unnoticed.
+function usable(dir) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.accessSync(dir, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let DATA_DIR = REQUESTED_DIR;
+let fellBack = false;
+
+if (!usable(DATA_DIR)) {
+  fellBack = true;
+  DATA_DIR = LEGACY_DIR;
+  fs.mkdirSync(DATA_DIR, { recursive: true });   // inside the app dir; always writable
+}
+
 const DB_FILE = path.join(DATA_DIR, 'crm.db');
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
-
-// A missing disk mount must fail loudly at boot rather than silently writing
-// to a path that vanishes, so create the directories and let any error throw.
-fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+if (fellBack) {
+  console.warn(
+    `\n[data] ⚠  DATA_DIR is set to "${REQUESTED_DIR}" but that directory cannot be created or written to.`
+    + '\n[data] ⚠  Falling back to the application folder so the CRM still starts.'
+    + '\n[data] ⚠  DATA IS NOT PERSISTENT: it will be lost on the next deploy, restart or spin-down.'
+    + '\n[data] ⚠  On Render this usually means the instance has no persistent disk (the free tier has none),'
+    + '\n[data] ⚠  or the disk\'s mount path does not match DATA_DIR.\n',
+  );
+}
 
 // --------------------------------------------------------------------------
 // One-time adoption of data from the old in-tree location.
