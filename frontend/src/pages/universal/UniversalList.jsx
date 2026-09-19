@@ -9,7 +9,8 @@ import { api } from '../../api';
 import { usePermissions } from '../../context/usePermissions';
 import StatusBadge from '../../components/StatusBadge';
 import { downloadCSV } from '../../utils/csv';
-import { getFieldValue, formatFieldValue, FieldInput, recordTitle } from './fieldUtils';
+import { getFieldValue, formatFieldValue, renderFieldValue, FieldInput, recordTitle } from './fieldUtils';
+import { cachedLabel } from './lookupCache';
 import { computeFollowupStatus, findFollowupField } from './followupUtils';
 import { kpisFor } from './listKpis';
 import { KpiCard, SkeletonRows, ErrorState, EmptyState, friendlyError } from '../../components/ui';
@@ -86,6 +87,7 @@ export default function UniversalList() {
   const [page, setPage] = useState(1);
   const [openMenu, setOpenMenu] = useState(null);
   const [kpiFilter, setKpiFilter] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const PAGE_SIZE = 25;
 
   useEffect(() => {
@@ -110,6 +112,17 @@ export default function UniversalList() {
 
   const listFields = useMemo(() => fields.filter((f) => f.show_in_list), [fields]);
   const createFields = useMemo(() => fields.filter((f) => f.show_in_create), [fields]);
+
+  const defaultsForCreate = useMemo(() => {
+    const out = {};
+    createFields.forEach((f) => {
+      if (f.default_value === null || f.default_value === undefined || f.default_value === '') return;
+      out[f.api_name] = f.field_type === 'checkbox'
+        ? ['1', 'true', 'yes'].includes(String(f.default_value).toLowerCase())
+        : f.default_value;
+    });
+    return out;
+  }, [createFields]);
   const statusField = useMemo(() => fields.find((f) => STATUS_TYPES.has(f.api_name)), [fields]);
   const followupField = useMemo(() => findFollowupField(fields), [fields]);
 
@@ -178,8 +191,26 @@ export default function UniversalList() {
   const pluralLabel = (module.plural_label || module.api_name || 'records');
   const singularLabel = (module.singular_label || module.api_name || 'record');
 
+  // Types where an empty value is legitimate, matching the server's list —
+  // a checkbox that is off, or a file uploaded separately, is not "missing".
+  const REQUIRED_EXEMPT = new Set(['checkbox', 'file', 'image']);
+
+  const validateRequired = () => {
+    const errs = {};
+    createFields.forEach((f) => {
+      if (!f.required || REQUIRED_EXEMPT.has(f.field_type)) return;
+      const v = form[f.api_name];
+      if (v === undefined || v === null || String(v).trim() === '') {
+        errs[f.api_name] = `${f.label} is required`;
+      }
+    });
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
   const submit = async (e) => {
     e.preventDefault();
+    if (!validateRequired()) return;
     setSaving(true);
     try {
       const payload = isQuotations
@@ -198,7 +229,7 @@ export default function UniversalList() {
         }
         : form;
       await api.universalCreate(module, payload);
-      setForm({});
+      setForm(defaultsForCreate);
       setQuoteItems([]);
       setDiscountValue(0);
       setShowForm(false);
@@ -210,9 +241,17 @@ export default function UniversalList() {
     }
   };
 
+  // Lookup columns hold a row id. Exporting those raw produced a spreadsheet
+  // with a "Customer" column full of numbers — the names are already on
+  // screen, so use the same resolved values the table is showing.
   const exportCsv = () => downloadCSV(`${module.api_name}.csv`, records.map((r) => {
     const row = { id: r.id };
-    listFields.forEach((f) => { row[f.label] = getFieldValue(r, f); });
+    listFields.forEach((f) => {
+      const v = getFieldValue(r, f);
+      row[f.label] = f.field_type === 'lookup'
+        ? (cachedLabel(f.lookup_module, v) ?? '')
+        : v;
+    });
     return row;
   }));
 
@@ -264,7 +303,16 @@ export default function UniversalList() {
             <button onClick={exportCsv} className="btn btn-secondary">Export CSV</button>
           )}
           {can(module.api_name, 'create') && (
-            <button onClick={() => setShowForm((s) => !s)} className="btn btn-primary">
+            <button onClick={() => setShowForm((s) => {
+              setFieldErrors({});
+              // Opening the form seeds it with each field's configured
+              // default. module_fields has carried a default_value column all
+              // along and nothing ever read it, so every new record started
+              // blank — including Currency, which is INR for this business on
+              // essentially every quotation.
+              if (!s) setForm(defaultsForCreate);
+              return !s;
+            })} className="btn btn-primary">
               {showForm ? 'Cancel' : `+ Add ${module.singular_label}`}
             </button>
           )}
@@ -301,8 +349,25 @@ export default function UniversalList() {
         <form onSubmit={submit} className="card p-5 mt-5 grid grid-cols-2 gap-4">
           {createFields.map((f) => (
             <div key={f.id} className={f.field_type === 'textarea' ? 'col-span-2' : ''}>
-              <label className="text-xs text-slate-500 font-medium block mb-1">{f.label}{f.required ? ' *' : ''}</label>
-              <FieldInput field={f} value={form[f.api_name]} onChange={(v) => setForm({ ...form, [f.api_name]: v })} />
+              <label className="text-xs text-slate-500 font-medium block mb-1">
+                {f.label}
+                {f.required ? <span style={{ color: 'var(--color-danger)' }}> *</span> : null}
+              </label>
+              <div className={fieldErrors[f.api_name] ? 'rounded-lg' : ''}
+                style={fieldErrors[f.api_name] ? { boxShadow: '0 0 0 2px var(--color-danger)' } : undefined}>
+                <FieldInput field={f} value={form[f.api_name]}
+                  onChange={(v) => {
+                    setForm({ ...form, [f.api_name]: v });
+                    // Clear the error as soon as they start fixing it —
+                    // leaving it red while they type reads as broken.
+                    if (fieldErrors[f.api_name]) {
+                      setFieldErrors((prev) => { const n = { ...prev }; delete n[f.api_name]; return n; });
+                    }
+                  }} />
+              </div>
+              {fieldErrors[f.api_name] && (
+                <p className="text-xs mt-1" style={{ color: 'var(--color-danger)' }}>{fieldErrors[f.api_name]}</p>
+              )}
             </div>
           ))}
           {isQuotations && (
@@ -362,7 +427,7 @@ export default function UniversalList() {
                     ) : f.api_name === statusField?.api_name ? (
                       <StatusBadge status={getFieldValue(r, f)} />
                     ) : (
-                      <span className="text-slate-500">{formatFieldValue(getFieldValue(r, f), f)}</span>
+                      <span className="text-slate-500">{renderFieldValue(r, f)}</span>
                     )}
                   </td>
                 )) : (

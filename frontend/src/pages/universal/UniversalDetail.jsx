@@ -5,7 +5,7 @@ import { api } from '../../api';
 import { usePermissions } from '../../context/usePermissions';
 import StatusBadge from '../../components/StatusBadge';
 import { friendlyError } from '../../components/ui';
-import { getFieldValue, formatFieldValue, FieldInput, recordTitle } from './fieldUtils';
+import { getFieldValue, formatFieldValue, renderFieldValue, FieldInput, recordTitle } from './fieldUtils';
 import { computeFollowupStatus, findFollowupField } from './followupUtils';
 import AddRelatedModal, { canCreateRelation, relationTargetModule } from './AddRelatedModal';
 import WhatsAppTemplateModal from '../../components/WhatsAppTemplateModal';
@@ -1078,7 +1078,7 @@ export default function UniversalDetail() {
                       const f = fields.find((x) => x.api_name === apiName);
                       if (!f) return null;
                       return <DetailRow key={apiName} label={f.label}
-                        value={formatFieldValue(getFieldValue(record, f), f)} />;
+                        value={renderFieldValue(record, f)} />;
                     })}
                   </dl>
                 </div>
@@ -1098,7 +1098,7 @@ export default function UniversalDetail() {
                   <dl>
                     {group.fields.map((f) => (
                       <DetailRow key={f.id} label={f.label}
-                        value={formatFieldValue(getFieldValue(record, f), f)} />
+                        value={renderFieldValue(record, f)} />
                     ))}
                   </dl>
                 </div>

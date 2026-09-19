@@ -172,6 +172,9 @@ export const api = {
   updateSavedReport: (id, body) => req('PUT', `/reports/saved/${id}`, body),
   deleteSavedReport: (id) => req('DELETE', `/reports/saved/${id}`),
 
+  // per-customer extensions (features built for one customer only)
+  extensionStatus: () => req('GET', '/extensions'),
+
   // calendar
   calendarProviders: () => req('GET', '/calendar/providers'),
   calendarConnections: () => req('GET', '/calendar/connections'),
@@ -299,6 +302,16 @@ export const api = {
   updateModuleField: (moduleId, fieldId, body) => req('PUT', `/modules/${moduleId}/fields/${fieldId}`, body),
   moduleFieldUsage: (moduleId, fieldId) => req('GET', `/modules/${moduleId}/fields/${fieldId}/usage`),
   deleteModuleField: (moduleId, fieldId) => req('DELETE', `/modules/${moduleId}/fields/${fieldId}`),
+
+  // Lookup pickers — searching a module by name, and resolving stored ids
+  // back to names so a record never shows "Customer: 47".
+  lookupSearch: (module, q, limit) => req('GET', `/search/lookup/${module}` + qs({ q, limit })),
+  lookupResolve: (module, ids) => req('GET', `/search/lookup/${module}` + qs({ ids: ids.join(',') })),
+
+  // Settings → Document Numbering
+  listDocumentSequences: () => req('GET', '/document-numbering'),
+  previewDocumentSequence: (docType, body) => req('POST', `/document-numbering/${docType}/preview`, body),
+  updateDocumentSequence: (docType, body) => req('PUT', `/document-numbering/${docType}`, body),
 
   // Universal CRM — generic record CRUD (works for standard + custom modules)
   universalList: (module, params) => req('GET', recordsBase(module) + qs(params)),

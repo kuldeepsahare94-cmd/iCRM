@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Percent, Coins, Plus, Trash2, Star } from 'lucide-react';
+import { Percent, Coins, Plus, Trash2, Star, Hash } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 import { PageHeader } from '../components/ui';
@@ -235,18 +235,165 @@ function CurrencySection({ can }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Document numbering
+// ---------------------------------------------------------------------------
+// Quotation numbers used to be hardcoded as QT-00001, generated from a row
+// count — so deleting a quotation made the next one collide and fail. The
+// counter now lives in the database, only moves forward, and the format is
+// editable here rather than in code, because every business numbers its
+// documents differently and an accountant should not need a developer.
+
+const RESET_LABELS = {
+  never: 'Never — one continuous series',
+  yearly: 'Every calendar year (January)',
+  financial_year: 'Every financial year (April–March)',
+  monthly: 'Every month',
+};
+
+function NumberingRow({ seq, can, onSaved }) {
+  const [draft, setDraft] = useState(seq);
+  const [preview, setPreview] = useState(seq.preview);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const dirty = ['prefix', 'suffix', 'padding', 'reset_period', 'include_period', 'next_number']
+    .some((k) => String(draft[k]) !== String(seq[k]));
+
+  // The preview comes from the server rather than being rebuilt here, so
+  // what an admin sees is literally what the next document will be issued
+  // with — a second copy of the formatting rules would eventually drift.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      api.previewDocumentSequence(seq.doc_type, draft)
+        .then((r) => setPreview(r.preview))
+        .catch(() => {});
+    }, 350);
+    return () => clearTimeout(t);
+  }, [draft, seq.doc_type]);
+
+  const save = async () => {
+    setBusy(true); setError(''); setSaved(false);
+    try {
+      const updated = await api.updateDocumentSequence(seq.doc_type, draft);
+      setDraft(updated);
+      setPreview(updated.preview);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+      onSaved(updated);
+    } catch (e) { setError(e.message); } finally { setBusy(false); }
+  };
+
+  const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+
+  return (
+    <div className="border border-line rounded-xl p-4">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h3 className="text-sm font-semibold text-ink">{seq.label}</h3>
+        <span className="text-xs text-slate-400">
+          Next: <span className="font-mono text-ink bg-canvas px-2 py-0.5 rounded">{preview}</span>
+        </span>
+      </div>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <label className="block">
+          <span className="text-[11px] text-slate-500 font-medium">Prefix</span>
+          <input value={draft.prefix || ''} onChange={(e) => set('prefix', e.target.value)}
+            placeholder={seq.default_prefix || 'QT-'} className={inputClass + ' w-full mt-0.5'} />
+        </label>
+        <label className="block">
+          <span className="text-[11px] text-slate-500 font-medium">Suffix</span>
+          <input value={draft.suffix || ''} onChange={(e) => set('suffix', e.target.value)}
+            placeholder="(optional)" className={inputClass + ' w-full mt-0.5'} />
+        </label>
+        <label className="block">
+          <span className="text-[11px] text-slate-500 font-medium">Digits</span>
+          <input type="number" min="1" max="12" value={draft.padding}
+            onChange={(e) => set('padding', Number(e.target.value))} className={inputClass + ' w-full mt-0.5'} />
+        </label>
+        <label className="block">
+          <span className="text-[11px] text-slate-500 font-medium">Next number</span>
+          <input type="number" min="1" value={draft.next_number}
+            onChange={(e) => set('next_number', Number(e.target.value))} className={inputClass + ' w-full mt-0.5'} />
+        </label>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-3 mt-3">
+        <label className="block">
+          <span className="text-[11px] text-slate-500 font-medium">Start again</span>
+          <select value={draft.reset_period} onChange={(e) => set('reset_period', e.target.value)}
+            className={inputClass + ' w-full mt-0.5'}>
+            {Object.entries(RESET_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-xs text-slate-600 self-end pb-2">
+          <input type="checkbox" checked={!!draft.include_period} disabled={draft.reset_period === 'never'}
+            onChange={(e) => set('include_period', e.target.checked ? 1 : 0)} />
+          Put the period in the number (TS/2026-27/0001)
+        </label>
+      </div>
+
+      <p className="text-[11px] text-slate-400 mt-3">
+        The counter only moves forward. A number that has already been issued is never given out again,
+        even if that document is deleted — a gap in the series is explainable, a repeat is not.
+      </p>
+
+      {error && <div className="text-xs text-warn bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-3">{error}</div>}
+
+      <div className="flex items-center gap-3 mt-3">
+        <button onClick={save} disabled={!dirty || busy || !can('settings', 'edit')}
+          className="bg-amber text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-40">
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        {saved && <span className="text-xs text-emerald-600">Saved.</span>}
+      </div>
+    </div>
+  );
+}
+
+function NumberingSection({ can }) {
+  const [sequences, setSequences] = useState([]);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.listDocumentSequences()
+      .then((r) => setSequences(r.sequences || []))
+      .catch((e) => setError(e.message));
+  }, []);
+
+  return (
+    <div className="card p-5 mt-5">
+      <h2 className="text-sm font-semibold text-ink flex items-center gap-1.5 mb-1">
+        <Hash className="w-4 h-4 text-amber" /> Document Numbering
+      </h2>
+      <p className="text-xs text-slate-400 mb-4">
+        How quotation, proforma and invoice numbers are built.
+      </p>
+      {error && <div className="text-xs text-warn bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{error}</div>}
+      <div className="space-y-4">
+        {sequences.map((s) => (
+          <NumberingRow key={s.doc_type} seq={s} can={can}
+            onSaved={(u) => setSequences((list) => list.map((x) => (x.doc_type === u.doc_type ? { ...x, ...u } : x)))} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsFinance() {
   const can = usePermissions();
   return (
     <div className="max-w-[1600px] mx-auto">
       <PageHeader
-        title="Taxes & Currencies"
-        subtitle="Tax rates for quotes and products, and the currencies you trade in."
+        title="Taxes, Currencies & Numbering"
+        subtitle="Tax rates for quotes and products, the currencies you trade in, and how documents are numbered."
         icon={Percent}
         accent="payments"
       />
 <TaxSection can={can} />
       <CurrencySection can={can} />
+      <NumberingSection can={can} />
     </div>
   );
 }
