@@ -88,7 +88,16 @@ function deleteModule(id) {
 // ---------------------------------------------------------------------------
 
 function listFields(moduleId) {
-  return db.prepare('SELECT * FROM module_fields WHERE module_id=? ORDER BY section, position, id').all(moduleId);
+  // `lookup_module` is the api_name behind lookup_module_id. The frontend
+  // needs a name to call the picker endpoint with, and an integer id it would
+  // have to resolve separately on every form is a round trip for nothing.
+  return db.prepare(`
+    SELECT f.*, m.api_name AS lookup_module, m.singular_label AS lookup_label
+      FROM module_fields f
+      LEFT JOIN modules m ON m.id = f.lookup_module_id
+     WHERE f.module_id = ?
+     ORDER BY f.section, f.position, f.id
+  `).all(moduleId);
 }
 
 function createField(moduleId, input) {

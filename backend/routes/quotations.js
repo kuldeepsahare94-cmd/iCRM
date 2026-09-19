@@ -7,6 +7,7 @@ const { fireEvent } = require('../services/whatsapp/workflowEngine');
 const { fireWorkflows } = require('../services/workflowAutomation');
 const { buildQuotationPdf, renderQuotationPdfBuffer } = require('../services/quotationPdf');
 const { sendEmail, isConfigured: emailConfigured } = require('../services/email');
+const { nextNumber } = require('../services/documentNumbering');
 
 function resolveMobile(accountId, contactId) {
   if (contactId) {
@@ -70,9 +71,13 @@ function recalcTotals(quotationId) {
   return { subtotal, totalDiscount, overallDiscount, taxTotal, grandTotal };
 }
 
+// Was COUNT(*) + 1, which reissued a number as soon as any quotation was
+// deleted and then died on the UNIQUE constraint. The counter now lives in
+// document_sequences, only moves forward, and is configurable in Settings.
+// Called inside the insert transaction so a failed insert doesn't burn a
+// number and two simultaneous creates can't be handed the same one.
 function nextQuoteNumber() {
-  const count = db.prepare('SELECT COUNT(*) c FROM quotations').get().c;
-  return `QT-${String(count + 1).padStart(5, '0')}`;
+  return nextNumber('quotation');
 }
 
 router.get('/', requirePermission('quotations', 'view'), (req, res) => {
@@ -104,7 +109,13 @@ router.get('/:id', requirePermission('quotations', 'view'), (req, res) => {
 // Body: { ...header fields, items: [{ product_id, description, quantity, unit_price, discount_percent, tax_percent }] }
 router.post('/', requirePermission('quotations', 'create'), (req, res) => {
   const b = req.body;
-  if (!b.account_id) return res.status(400).json({ error: 'account_id is required' });
+  // A quotation with no customer can't be addressed, priced against a
+  // currency, or printed — so this stays required. The create form now asks
+  // for it (it previously didn't, which is why quotations could only be made
+  // from inside an Account).
+  if (!b.account_id) return res.status(400).json({ error: 'Choose a customer for this quotation.' });
+  const account = db.prepare('SELECT id FROM accounts WHERE id=?').get(b.account_id);
+  if (!account) return res.status(400).json({ error: 'That customer no longer exists.' });
   const tx = db.transaction(() => {
     const info = db.prepare(`
       INSERT INTO quotations (
@@ -115,12 +126,16 @@ router.post('/', requirePermission('quotations', 'create'), (req, res) => {
         @shipping_address, @currency, @payment_terms, @salesperson_id, @notes, @terms, @status,
         @overall_discount_type, @overall_discount_value)
     `).run({
-      quote_number: b.quote_number || nextQuoteNumber(),
       quote_date: b.quote_date || new Date().toISOString(),
       valid_until: null, contact_id: null, opportunity_id: null, billing_address: null, shipping_address: null,
       currency: 'INR', payment_terms: null, salesperson_id: req.user.id, notes: null, terms: null, status: 'Draft',
       overall_discount_type: 'percent', overall_discount_value: 0,
       ...b,
+      // After the spread, not before: the create form posts every field it
+      // shows, and an untouched Quote # box arrives as an empty string. Left
+      // in the spread that empty string won the merge, and the second
+      // quotation of the day collided on the UNIQUE constraint.
+      quote_number: b.quote_number || nextQuoteNumber(),
     });
     const quotationId = info.lastInsertRowid;
     const insertItem = db.prepare(`

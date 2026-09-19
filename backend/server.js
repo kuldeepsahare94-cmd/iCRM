@@ -26,6 +26,7 @@ require('./db-phase34-lead-company');
 require('./db-phase35-chat');
 require('./db-phase36-reports');
 require('./db-phase37-calendar');
+require('./db-phase38-numbering');
 
 const app = express();
 
@@ -110,6 +111,7 @@ app.use('/api/contacts', requireAuth, require('./routes/contacts'));
 app.use('/api/opportunities', requireAuth, require('./routes/opportunities'));
 app.use('/api/products', requireAuth, require('./routes/products'));
 app.use('/api/quotations', requireAuth, require('./routes/quotations'));
+app.use('/api/document-numbering', requireAuth, require('./routes/documentNumbering'));
 app.use('/api/subscriptions', requireAuth, require('./routes/subscriptions'));
 app.use('/api/tickets', requireAuth, require('./routes/tickets'));
 app.use('/api/calls', requireAuth, require('./routes/callDisposition'));
@@ -134,6 +136,23 @@ app.use('/api/inbox', requireAuth, require('./routes/inbox'));
 app.use('/api/track', require('./routes/tracking'));
 app.use('/api/email-campaigns', requireAuth, require('./routes/emailCampaigns'));
 app.use('/api/ai-actions', requireAuth, require('./routes/aiActions'));
+
+// ---------------------------------------------------------------------------
+// Per-customer extensions — features built for ONE customer.
+// ---------------------------------------------------------------------------
+// Loaded last, on purpose: an extension adds to the CRM and can never shadow a
+// core route, so upgrading the core cannot silently change a customer's
+// bespoke behaviour. Bespoke code lives beside that customer's DATA, not in
+// this shared tree, which is what lets a core fix be deployed once and reach
+// every customer — including the heavily customised ones.
+//
+// See services/extensions.js for the contract and why it is shaped this way.
+const extensions = require('./services/extensions');
+extensions.load(app);
+
+// A read-only view of what this instance has loaded, so "which bespoke
+// features does this customer have?" is answerable without an SSH session.
+app.get('/api/extensions', requireAuth, (req, res) => res.json(extensions.status()));
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
