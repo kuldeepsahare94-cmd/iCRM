@@ -17,7 +17,37 @@ import {
 } from 'recharts';
 
 const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
-const STAGE_FALLBACK = ['#3B82F6', '#EC4899', '#8B5CF6', '#14B8A6', '#F59E0B', '#10B981', '#F43F5E'];
+
+// The seven standard sales stages have a fixed colour in the design system,
+// and it wins over whatever is stored against the stage. The stored values
+// predate the palette (#60A5FA, #818CF8, #EF4444 — near-misses of the real
+// blue, violet and red), and three near-miss colours in a seven-segment
+// donut is exactly the "random chart colours" the palette exists to stop.
+// A stage NOT in this list is a stage someone created themselves, so its
+// configured colour is honoured, and the ordered list catches the rest.
+const STAGE_NAMED = {
+  New: '#94A3B8',
+  Qualification: '#3B82F6',
+  'Needs Analysis': '#8B5CF6',
+  Proposal: '#A78BFA',
+  Negotiation: '#F59E0B',
+  Won: '#10B981',
+  Lost: '#F43F5E',
+};
+const STAGE_FALLBACK = ['#3B82F6', '#8B5CF6', '#A78BFA', '#14B8A6', '#F59E0B', '#10B981', '#F43F5E'];
+
+// One tooltip treatment for both charts — dark slate, white text, compact.
+const TOOLTIP_STYLE = {
+  borderRadius: 8,
+  border: 'none',
+  background: '#17233C',
+  color: '#FFFFFF',
+  fontSize: 11,
+  padding: '7px 9px',
+  boxShadow: '0 4px 14px rgba(23, 35, 60, 0.15)',
+};
+const TOOLTIP_LABEL = { color: '#FFFFFF', fontWeight: 600, marginBottom: 2 };
+const TOOLTIP_ITEM = { color: '#FFFFFF' };
 
 // Pipeline-by-stage donut, using each stage's OWN colour from the pipeline
 // configuration (module_pipeline_stages.color) rather than a fixed palette
@@ -30,52 +60,54 @@ const STAGE_FALLBACK = ['#3B82F6', '#EC4899', '#8B5CF6', '#14B8A6', '#F59E0B', '
 export function StageDonut({ stages = [], centreLabel = 'Total Deals' }) {
   const total = stages.reduce((s, x) => s + (x.c || 0), 0);
   const data = stages.filter((s) => s.c > 0);
-  const colourOf = (s, i) => s.color || STAGE_FALLBACK[i % STAGE_FALLBACK.length];
+  const colourOf = (s, i) => STAGE_NAMED[s.stage] || s.color || STAGE_FALLBACK[i % STAGE_FALLBACK.length];
   return (
-    <div className="flex items-center gap-6 flex-wrap">
-      <div className="relative w-[168px] h-[168px] shrink-0">
+    <div className="flex items-center gap-5 flex-wrap">
+      <div className="relative w-[150px] h-[150px] shrink-0">
         {total === 0 ? (
-          <div className="w-[168px] h-[168px] rounded-full border-[10px] border-[var(--color-line)] flex items-center justify-center">
-            <span className="t-meta">No deals</span>
+          <div className="w-[150px] h-[150px] rounded-full border-[10px] flex items-center justify-center"
+            style={{ borderColor: 'var(--color-line)' }}>
+            <span className="text-[11px]" style={{ color: 'var(--color-faint)' }}>No deals</span>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <defs>
-                {/* A faint drop shadow under the ring itself — this is what
-                    separates the donut from the flat centre disc rather than
-                    the two reading as one grey blob. */}
-                <filter id="donutLift" x="-40%" y="-40%" width="180%" height="180%">
-                  <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#1E1B4B" floodOpacity="0.16" />
-                </filter>
-              </defs>
-              <Pie data={data} dataKey="c" nameKey="stage" innerRadius={56} outerRadius={82} paddingAngle={3}
-                strokeWidth={0} cornerRadius={5} filter="url(#donutLift)">
+              {/* No drop-shadow filter on the ring. The segments carry their
+                  own colour and a 3° gap already separates them; a shadow
+                  under an SVG arc mostly reads as the chart being slightly
+                  out of focus. */}
+              <Pie data={data} dataKey="c" nameKey="stage" innerRadius={50} outerRadius={73} paddingAngle={3}
+                strokeWidth={0} cornerRadius={5}>
                 {data.map((s, i) => <Cell key={i} fill={colourOf(s, i)} />)}
               </Pie>
               <Tooltip formatter={(v, n, p) => [`${v} deal(s) · ${inr(p.payload.total)}`, p.payload.stage]}
-                contentStyle={{ borderRadius: 10, border: '1px solid var(--color-line)', fontSize: 12, boxShadow: '0 8px 24px -8px rgba(30,27,75,.25)' }} />
+                contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} />
             </PieChart>
           </ResponsiveContainer>
         )}
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="dash-figure text-[28px] font-bold leading-none">{total}</span>
-          <span className="t-meta mt-1">{centreLabel}</span>
+          <span className="text-[23px] font-bold leading-none tabular-nums" style={{ color: 'var(--color-ink)', letterSpacing: '-0.02em' }}>{total}</span>
+          <span className="text-[10px] mt-1" style={{ color: 'var(--color-faint)' }}>{centreLabel}</span>
         </div>
       </div>
-      <div className="flex-1 min-w-[170px] space-y-2.5">
+      <div className="flex-1 min-w-[150px] space-y-[7px]">
         {stages.map((s, i) => (
-          <div key={s.stage} className="flex items-center justify-between text-sm gap-2">
+          <div key={s.stage} className="flex items-center justify-between text-[12px] gap-2">
             <span className="flex items-center gap-2 min-w-0">
-              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: colourOf(s, i), boxShadow: `0 0 6px ${colourOf(s, i)}99` }} />
-              <span className="text-ink truncate">{s.stage}</span>
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: colourOf(s, i) }} />
+              <span className="truncate" style={{ color: 'var(--color-ink)' }}>{s.stage}</span>
             </span>
-            <span className="text-[var(--color-muted)] shrink-0 font-medium tabular-nums">
-              {s.c} {total > 0 && <span className="text-xs font-normal">({Math.round((s.c / total) * 100)}%)</span>}
+            <span className="shrink-0 font-semibold tabular-nums" style={{ color: 'var(--color-ink)' }}>
+              {s.c}{' '}
+              {total > 0 && (
+                <span className="text-[11px] font-normal" style={{ color: 'var(--color-faint)' }}>
+                  ({Math.round((s.c / total) * 100)}%)
+                </span>
+              )}
             </span>
           </div>
         ))}
-        {stages.length === 0 && <p className="t-meta">No pipeline configured.</p>}
+        {stages.length === 0 && <p className="text-[11px]" style={{ color: 'var(--color-faint)' }}>No pipeline configured.</p>}
       </div>
     </div>
   );
@@ -87,31 +119,23 @@ export function RevenueArea({ data = [] }) {
     <ResponsiveContainer width="100%" height={220}>
       <AreaChart data={data} margin={{ top: 8, right: 4, left: -8, bottom: 0 }}>
         <defs>
+          {/* One colour, fading out. The previous version ran a gradient
+              along the stroke and a drop-shadow under it; at 2px both are
+              read as blur rather than as emphasis. */}
           <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#4F46E5" stopOpacity={0.35} />
-            <stop offset="55%" stopColor="#4F46E5" stopOpacity={0.08} />
-            <stop offset="100%" stopColor="#4F46E5" stopOpacity={0} />
+            <stop offset="0%" stopColor="#6C4FF7" stopOpacity={0.18} />
+            <stop offset="100%" stopColor="#6C4FF7" stopOpacity={0} />
           </linearGradient>
-          <linearGradient id="revenueLine" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#818CF8" />
-            <stop offset="100%" stopColor="#4F46E5" />
-          </linearGradient>
-          {/* A soft glow sitting under the line itself, in the line's own
-              colour — the touch that makes the trend read as "lit" rather
-              than as a plain plotted stroke. */}
-          <filter id="lineGlow" x="-20%" y="-60%" width="140%" height="220%">
-            <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#4F46E5" floodOpacity="0.45" />
-          </filter>
         </defs>
-        <CartesianGrid strokeDasharray="3 6" stroke="var(--color-line)" vertical={false} />
-        <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--color-muted)' }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fontSize: 11, fill: 'var(--color-muted)' }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`} />
-        <Tooltip formatter={(v) => inr(v)}
-          contentStyle={{ borderRadius: 10, border: '1px solid var(--color-line)', fontSize: 12, boxShadow: '0 8px 24px -8px rgba(30,27,75,.25)' }} />
-        <Area type="monotone" dataKey="revenue" stroke="url(#revenueLine)" strokeWidth={3} fill="url(#revenueFill)"
-          filter="url(#lineGlow)"
-          dot={{ fill: '#4F46E5', r: 4, strokeWidth: 2, stroke: '#fff' }}
-          activeDot={{ r: 7, stroke: '#fff', strokeWidth: 2 }} />
+        <CartesianGrid strokeDasharray="3 6" stroke="#EEF0F5" vertical={false} />
+        <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#98A2B3' }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 10, fill: '#98A2B3' }} axisLine={false} tickLine={false}
+          tickFormatter={(v) => `₹${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}`} />
+        <Tooltip formatter={(v) => [inr(v), 'Collected']} cursor={{ stroke: '#DDD6FE', strokeWidth: 1 }}
+          contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL} itemStyle={TOOLTIP_ITEM} />
+        <Area type="monotone" dataKey="revenue" stroke="#6C4FF7" strokeWidth={2.5} fill="url(#revenueFill)"
+          dot={{ fill: '#FFFFFF', r: 3.5, strokeWidth: 2, stroke: '#6C4FF7' }}
+          activeDot={{ r: 6, fill: '#6C4FF7', stroke: '#FFFFFF', strokeWidth: 2 }} />
       </AreaChart>
     </ResponsiveContainer>
   );

@@ -6,42 +6,62 @@
    reference these tokens rather than hard-coded hex values, so
    the whole product restyles from here.
    ============================================================ */
+/* ------------------------------------------------------------------
+   The master palette lives here and ONLY here. Components reference
+   these tokens; none of them hard-code a hex value. Adding a second
+   set of dashboard-only tokens would have meant two palettes drifting
+   apart, so the existing token names keep their semantic roles and
+   take the new values — the dashboard and the rest of the app stay
+   one system.
+   ------------------------------------------------------------------ */
 @theme {
-  /* Brand — indigo/violet family, the SaaS-standard primary */
-  --color-brand: #4F46E5;
-  --color-brand-hover: #4338CA;
-  --color-brand-soft: #EEF2FF;
-  --color-brand-border: #C7D2FE;
+  /* Brand — the primary purple */
+  --color-brand: #6C4FF7;
+  --color-brand-hover: #5137D9;       /* hover / active / strong emphasis */
+  --color-brand-soft: #F0EDFF;        /* icon backgrounds, selected states */
+  --color-brand-faint: #F8F6FF;       /* hover surfaces, subtle tints */
+  --color-brand-border: #DDD6FE;
 
   /* Surfaces */
-  --color-canvas: #F7F8FC;      /* app background */
+  --color-canvas: #F7F8FC;      /* app background — never pure white */
+  --color-canvas-alt: #F4F5FA;  /* secondary background */
   --color-surface: #FFFFFF;     /* cards, tables, drawer */
-  --color-line: #E7E9F0;        /* borders/dividers — deliberately soft */
+  --color-surface-soft: #FAFAFD; /* inset rows inside a card */
+  --color-line: #E7EAF0;        /* borders/dividers */
+  --color-line-soft: #F0F1F5;   /* the lightest divider — inset row borders */
   --color-line-strong: #D3D7E3;
 
-  /* Text */
-  --color-ink: #101423;         /* headings */
-  --color-ink-light: #1E2338;
-  --color-muted: #6B7280;       /* secondary/metadata */
-  --color-faint: #9CA3AF;
+  /* Text — four steps, used strictly in order of importance */
+  --color-ink: #17233C;         /* headings, KPI figures */
+  --color-ink-light: #2C3A57;
+  --color-muted: #667085;       /* secondary/metadata */
+  --color-faint: #98A2B3;       /* timestamps, axis labels */
+  --color-disabled: #B8BEC9;
 
   /* Semantic — each has a solid tone and a pastel surface.
-     Statuses map to these so the same meaning always looks the same. */
-  --color-info: #2563EB;        --color-info-soft: #EFF6FF;
-  --color-success: #059669;     --color-success-soft: #ECFDF5;
-  --color-warning: #D97706;     --color-warning-soft: #FFFBEB;
-  --color-attention: #EA580C;   --color-attention-soft: #FFF7ED;
-  --color-danger: #DC2626;      --color-danger-soft: #FEF2F2;
-  --color-special: #7C3AED;     --color-special-soft: #F5F3FF;
-  --color-neutral: #64748B;     --color-neutral-soft: #F1F5F9;
+     Statuses map to these so the same meaning always looks the same,
+     and nothing picks a different shade for the same meaning. */
+  --color-info: #3B82F6;        --color-info-soft: #EFF6FF;
+  --color-info-strong: #2563EB;
+  --color-success: #10B981;     --color-success-soft: #ECFDF5;
+  --color-success-strong: #059669;
+  --color-teal: #14B8A6;        --color-teal-soft: #ECFDF9;
+  --color-teal-strong: #0F9F8F;
+  --color-warning: #F59E0B;     --color-warning-soft: #FFFBEB;
+  --color-warning-strong: #D97706;
+  --color-attention: #F97316;   --color-attention-soft: #FFF7ED;
+  --color-danger: #F43F5E;      --color-danger-soft: #FFF1F2;
+  --color-danger-strong: #E11D48;
+  --color-special: #8B5CF6;     --color-special-soft: #F5F3FF;
+  --color-neutral: #94A3B8;     --color-neutral-soft: #F1F5F9;
 
   /* Legacy aliases — the previous palette is referenced across many
      existing components. Mapping them here restyles those to the new
      system without touching every file, and avoids a big-bang rewrite. */
-  --color-amber: #4F46E5;
-  --color-amber-soft: #EEF2FF;
-  --color-good: #059669;
-  --color-warn: #DC2626;
+  --color-amber: #6C4FF7;
+  --color-amber-soft: #F0EDFF;
+  --color-good: #10B981;
+  --color-warn: #F43F5E;
 
   --font-display: "Inter", "Segoe UI", sans-serif;
   --font-body: "Inter", "Segoe UI", sans-serif;
@@ -61,16 +81,17 @@ body {
 .t-section     { font-size: 0.9375rem; font-weight: 600; color: var(--color-ink); }
 .t-meta        { font-size: 0.75rem; color: var(--color-muted); }
 
-/* Surfaces */
+/* Surfaces — the same card system the dashboard uses, so a card looks
+   like a card everywhere in the product rather than per-screen. */
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-line);
-  border-radius: 0.75rem;
-  box-shadow: 0 1px 2px rgba(16, 20, 35, 0.04);
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(23, 35, 60, 0.05);
 }
-.card-hover { transition: box-shadow .15s ease, border-color .15s ease; }
+.card-hover { transition: box-shadow .2s ease, border-color .2s ease; }
 .card-hover:hover {
-  box-shadow: 0 4px 12px rgba(16, 20, 35, 0.08);
+  box-shadow: 0 6px 18px rgba(23, 35, 60, 0.08);
   border-color: var(--color-line-strong);
 }
 
@@ -121,7 +142,7 @@ body {
 /* Skeleton loading */
 @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
 .skeleton {
-  background: linear-gradient(90deg, #EEF0F6 25%, #F7F8FC 50%, #EEF0F6 75%);
+  background: linear-gradient(90deg, #EEF0F5 25%, #F7F8FC 50%, #EEF0F5 75%);
   background-size: 800px 100%;
   animation: shimmer 1.4s infinite linear;
   border-radius: .375rem;
@@ -142,123 +163,125 @@ body {
 .thin-scroll::-webkit-scrollbar-thumb { background: var(--color-line-strong); border-radius: 4px; }
 
 /* ============================================================
-   Dashboard "premium" effects.
+   Dashboard design system
    ============================================================
-   Scoped to the Dashboard only — these are deliberately not folded into
-   `.card`, because the brief was to lift the one screen everyone sees
-   first without changing how the rest of the app behaves.
+   One visual language, applied everywhere on the page:
 
-   Three ideas run through all of it:
-     1. Depth — a real shadow, not a hairline, so a card sits ABOVE the
-        canvas rather than being a rectangle drawn on it.
-     2. Glow — each section's own accent colour leaks a few soft pixels
-        outside its edge, which is what makes a panel feel "lit" instead
-        of flat, without tipping into neon.
-     3. Motion — a brief, staggered rise-and-fade on load, and a lift on
-        hover. Both are short (200–450ms) and both are cut entirely under
-        prefers-reduced-motion, because "premium" and "distracting" are
-        decided by duration, not by whether motion exists at all.
+     light page background → white card → subtle border
+       → soft shadow → accent colour → clear typography
+
+   The previous version of this block chased depth with heavy
+   shadows and a colour-matched halo that bled outside every card on
+   hover. Up close that reads as decoration rather than hierarchy, and
+   with nine panels glowing in nine different colours the page had no
+   focal point. Depth here is now carried by one restrained shadow and
+   the step from canvas to white — which is what separates enterprise
+   software from a landing page.
    ============================================================ */
 
 .dash-card {
   position: relative;
   background: var(--color-surface);
   border: 1px solid var(--color-line);
-  border-radius: 1rem;
-  box-shadow: 0 1px 2px rgba(16, 20, 35, 0.04), 0 12px 28px -14px rgba(30, 27, 75, 0.14);
-  transition: transform .25s cubic-bezier(.16,1,.3,1), box-shadow .25s cubic-bezier(.16,1,.3,1), border-color .25s ease;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(23, 35, 60, 0.05);
+  transition: box-shadow .2s ease, border-color .2s ease, transform .2s ease;
 }
 .dash-card:hover {
-  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(23, 35, 60, 0.08);
   border-color: var(--color-line-strong);
-  box-shadow: 0 1px 2px rgba(16, 20, 35, 0.04), 0 24px 40px -16px rgba(30, 27, 75, 0.22);
+  /* 1px, not a lift. A card that jumps under the cursor is movement the
+     reader has to absorb before they can read the number on it. */
+  transform: translateY(-1px);
 }
 
-/* A soft, colour-matched halo sitting just behind a card — the "glow".
-   Pass the tint via --glow-color (an rgba string). Kept as its own
-   absolutely-positioned pseudo-element rather than a box-shadow so it can
-   blur wider than a shadow would without looking like the card itself is
-   fuzzy at the edges. */
-.dash-glow { position: relative; }
-.dash-glow::before {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(140deg, var(--glow-color, rgba(99,102,241,.35)), transparent 55%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  opacity: 0;
-  transition: opacity .3s ease;
-  pointer-events: none;
-}
-.dash-glow:hover::before { opacity: 1; }
+/* The accent a card carries on hover: a barely-there wash of its own
+   colour from the top-right, set per card via --accent-rgb. This replaces
+   the old outer halo — the tint stays inside the card's own edges, so
+   nine cards can each have their own colour without the page looking lit
+   from behind. */
 .dash-glow::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: 0 0 0 0 var(--glow-color, transparent);
-  transition: box-shadow .35s ease;
+  background: radial-gradient(circle at 92% 6%, rgba(var(--accent-rgb, 108, 79, 247), 0.07), transparent 55%);
+  opacity: 0;
+  transition: opacity .2s ease;
   pointer-events: none;
 }
-.dash-glow:hover::after { box-shadow: 0 8px 40px -6px var(--glow-color, transparent); }
+.dash-glow:hover::after { opacity: 1; }
 
-/* Icon chips: a soft ambient ring behind the gradient square, so the icon
-   reads as a light source rather than a flat coloured tile. */
-.dash-icon-chip { position: relative; }
-.dash-icon-chip::before {
-  content: '';
-  position: absolute;
-  inset: -6px;
-  border-radius: inherit;
-  background: inherit;
-  filter: blur(10px);
-  opacity: .45;
-  z-index: -1;
+/* The resting-state micro-gradient on a KPI card — the same idea at a
+   lower opacity, always on, so a card has some life before you touch it. */
+.dash-kpi-wash {
+  background: radial-gradient(circle 150px at 92% 6%, rgba(var(--accent-rgb, 108, 79, 247), 0.10), transparent 60%);
+}
+
+/* An inset row inside a card — activity rows, contact rows, task rows.
+   Having one class for this is what makes those three lists read as the
+   same component rather than three different treatments. */
+.dash-row {
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-line-soft);
+  border-radius: 10px;
+  transition: background-color .18s ease, border-color .18s ease;
+}
+.dash-row:hover {
+  background: var(--color-brand-faint);
+  border-color: var(--color-brand-border);
+}
+
+/* Filter pills (All / Task / Meeting). */
+.dash-pill {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  color: var(--color-muted);
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease;
+}
+.dash-pill:hover { color: var(--color-ink); }
+.dash-pill[data-active="true"] {
+  background: var(--color-brand-soft);
+  border-color: var(--color-brand-border);
+  color: var(--color-brand);
 }
 
 /* Entrance: a short rise-and-fade, staggered per element via
    --stagger (index * delay, set inline). Runs once on mount. */
 @keyframes dash-rise {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .dash-enter {
-  animation: dash-rise .5s cubic-bezier(.16,1,.3,1) both;
+  animation: dash-rise .4s cubic-bezier(.16,1,.3,1) both;
   animation-delay: var(--stagger, 0ms);
 }
 
-/* Numeral emphasis for the big KPI figure — a very subtle gradient text
-   fill reads as more considered than flat ink, at a size where it's a
-   texture rather than a legibility risk. */
+/* The big KPI figure. Solid ink, not a gradient fill — at 24px a
+   gradient is texture nobody asked for, and it costs contrast. */
 .dash-figure {
-  background: linear-gradient(180deg, var(--color-ink) 0%, var(--color-ink-light) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--color-ink);
+  letter-spacing: -0.02em;
 }
 
-/* Animated progress fill for the source bars — width transitions in on
-   mount instead of appearing pre-filled, and carries a faint glow in its
-   own colour. */
-.dash-bar-fill {
-  transition: width .8s cubic-bezier(.16,1,.3,1);
-  box-shadow: 0 0 10px 0 var(--bar-glow, transparent);
-}
+/* Animated progress fill for the source/collection bars — width
+   transitions in on mount instead of appearing pre-filled. No glow: a
+   7px bar with a shadow under it just looks blurred. */
+.dash-bar-fill { transition: width .8s cubic-bezier(.16,1,.3,1); }
 
-/* Slow ambient drift for the two light blooms inside the "Keep the
-   Momentum" panel — small, looping, and slow enough (9–11s) to read as
-   ambient rather than as something demanding attention. */
+/* Slow ambient drift for the light blooms inside the bottom CTA — the
+   one place on the page where motion runs continuously, slow enough
+   (9–11s) to read as ambient rather than as something asking for
+   attention. */
 @keyframes dash-drift {
   0%, 100% { transform: translate(0, 0) scale(1); }
   50%      { transform: translate(-14px, 10px) scale(1.06); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dash-card, .dash-glow::before, .dash-glow::after, .dash-bar-fill { transition: none; }
+  .dash-card, .dash-glow::after, .dash-bar-fill, .dash-row, .dash-pill { transition: none; }
+  .dash-card:hover { transform: none; }
   .dash-enter { animation: none; }
   [class*="animate-[dash-drift"] { animation: none; }
 }
