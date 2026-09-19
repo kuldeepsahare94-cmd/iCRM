@@ -29,11 +29,20 @@ const SKIP = new Set([
 const EXEMPT_TYPES = new Set(['checkbox', 'file', 'image']);
 
 function moduleFromPath(originalUrl) {
-  // /api/accounts/12  -> accounts
+  // /api/accounts          -> accounts   (create)
+  // /api/accounts/12       -> accounts   (edit)
   // /api/records/vendors/5 -> vendors
+  //
+  // Anything deeper is an action on a record, not the record itself:
+  // /api/quotations/12/convert/invoice, /api/invoices/8/payments,
+  // /api/quotations/12/send. Those bodies are action parameters, and checking
+  // them against the module's required fields rejected every one of them —
+  // "Customer is required" on a request whose customer is already on the
+  // record being acted upon.
   const parts = String(originalUrl).split('?')[0].split('/').filter(Boolean);
   if (parts[0] !== 'api') return null;
-  if (parts[1] === 'records') return parts[2] || null;
+  if (parts[1] === 'records') return parts.length <= 4 ? (parts[2] || null) : null;
+  if (parts.length > 3) return null;
   return parts[1] || null;
 }
 

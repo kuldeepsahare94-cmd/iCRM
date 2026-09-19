@@ -18,6 +18,7 @@ const revenueReports = require('./revenueReports');
 const customerReports = require('./customerReports');
 const supportReports = require('./supportReports');
 const activityReports = require('./activityReports');
+const documentReports = require('./documentReports');
 const { distinctValues } = require('./helpers');
 
 const ALL = [
@@ -25,6 +26,7 @@ const ALL = [
   ...salesReports,
   ...customerReports,
   ...revenueReports,
+  ...documentReports,
   ...supportReports,
   ...activityReports,
 ];

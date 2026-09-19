@@ -27,6 +27,7 @@ require('./db-phase35-chat');
 require('./db-phase36-reports');
 require('./db-phase37-calendar');
 require('./db-phase38-numbering');
+require('./db-phase39-documents');
 
 const app = express();
 
@@ -112,6 +113,19 @@ app.use('/api/opportunities', requireAuth, require('./routes/opportunities'));
 app.use('/api/products', requireAuth, require('./routes/products'));
 app.use('/api/quotations', requireAuth, require('./routes/quotations'));
 app.use('/api/document-numbering', requireAuth, require('./routes/documentNumbering'));
+// Proforma Invoices and Invoices: the same router built twice, because they
+// are the same document with different wording. See routes/documents.factory.js.
+const documentRouter = require('./routes/documents.factory');
+const proformaRouter = documentRouter({ docType: 'proforma', permission: 'proforma_invoices' });
+// Mounted under BOTH spellings on purpose. The universal record UI builds its
+// URL straight from the module's api_name, which is `proforma_invoices` with
+// an underscore; a hyphenated mount alone gave every proforma page a 404.
+// The hyphenated path is the readable one and stays as an alias.
+app.use('/api/proforma_invoices', requireAuth, proformaRouter);
+app.use('/api/proforma-invoices', requireAuth, proformaRouter);
+app.use('/api/invoices', requireAuth, documentRouter({ docType: 'invoice', permission: 'invoices' }));
+app.use('/api/document-templates', requireAuth, require('./routes/documentTemplates'));
+app.use('/api/company-profile', requireAuth, require('./routes/companyProfile'));
 app.use('/api/subscriptions', requireAuth, require('./routes/subscriptions'));
 app.use('/api/tickets', requireAuth, require('./routes/tickets'));
 app.use('/api/calls', requireAuth, require('./routes/callDisposition'));
@@ -165,4 +179,19 @@ app.listen(PORT, () => {
   } catch (e) {
     console.warn('Inbound email polling not started:', e.message);
   }
+
+  // Overdue is a fact about today, not a state anyone sets, so invoices that
+  // passed their due date overnight are swept into Overdue on boot and once
+  // an hour after. Without this, a workflow or report filtering on status
+  // would disagree with what the list plainly shows.
+  const sweepOverdue = () => {
+    try {
+      const changed = require('./services/documentService').markOverdue();
+      if (changed) console.log(`[invoices] ${changed} invoice(s) marked overdue`);
+    } catch (e) {
+      console.warn('[invoices] overdue sweep failed:', e.message);
+    }
+  };
+  sweepOverdue();
+  setInterval(sweepOverdue, 60 * 60 * 1000).unref();
 });

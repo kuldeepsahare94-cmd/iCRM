@@ -23,7 +23,8 @@
     "multer": "^2.3.0",
     "nodemailer": "^9.0.5",
     "pdfkit": "^0.19.1",
-    "prisma": "^7.8.0"
+    "prisma": "^7.8.0",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

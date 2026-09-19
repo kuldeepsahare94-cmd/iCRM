@@ -18,7 +18,13 @@ const { anthropic, MODEL } = require('../services/aiClient');
 // it must keep working when the AI service is unavailable, and a
 // recommendation you can trace to a record is more trustworthy than one
 // you can't.
-function nextBestActions({ accountId, tickets, tasks, quotations, opportunities, subscriptions, contacts, timeline }) {
+// Cancelled, draft and written-off invoices are not money owed or earned,
+// so they never count towards a figure anyone would act on.
+function liveInvoices(rows) {
+  return rows.filter((d) => !['Cancelled', 'Draft', 'Written Off'].includes(d.status));
+}
+
+function nextBestActions({ accountId, tickets, tasks, quotations, invoices = [], opportunities, subscriptions, contacts, timeline }) {
   const today = new Date().toISOString().slice(0, 10);
   const out = [];
 
@@ -34,6 +40,34 @@ function nextBestActions({ accountId, tickets, tasks, quotations, opportunities,
     const expired = sentQuote.valid_until && sentQuote.valid_until.slice(0, 10) < today;
     out.push({ priority: expired ? 2 : 3, action: `Follow up on quotation ${sentQuote.quote_number}`,
       reason: expired ? 'Past its valid-until date' : 'Sent but not yet accepted', link: `/records/quotations/${sentQuote.id}` });
+  }
+
+  // Chasing money already owed outranks almost everything else here: the work
+  // is done, the invoice is out, and the only thing standing between the
+  // business and the cash is someone making a call.
+  const lateInvoice = liveInvoices(invoices)
+    .filter((d) => d.due_date && String(d.due_date).slice(0, 10) < today && d.payment_status !== 'Paid')
+    .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))[0];
+  if (lateInvoice) {
+    const daysLate = Math.floor((Date.now() - new Date(lateInvoice.due_date).getTime()) / 86400000);
+    out.push({
+      priority: 1,
+      action: `Chase payment on ${lateInvoice.doc_number}`,
+      reason: `₹${Number(lateInvoice.balance_due || 0).toLocaleString('en-IN')} outstanding, ${daysLate} day(s) past due`,
+      link: `/records/invoices/${lateInvoice.id}`,
+    });
+  }
+
+  // A quotation the customer accepted but nobody billed for is revenue
+  // sitting on the floor.
+  const unbilled = quotations.find((q) => q.status === 'Accepted' && !q.converted_to_document_id);
+  if (unbilled) {
+    out.push({
+      priority: 2,
+      action: `Raise an invoice for ${unbilled.quote_number}`,
+      reason: 'Accepted but never converted to an invoice',
+      link: `/records/quotations/${unbilled.id}`,
+    });
   }
 
   const renewal = subscriptions.filter((s) => s.status === 'Active' && s.renewal_date
@@ -72,8 +106,18 @@ router.get('/accounts/:id', requirePermission('accounts', 'view'), (req, res) =>
            s.name AS stage, s.color AS stage_color, s.is_won, s.is_lost
     FROM opportunities o LEFT JOIN module_pipeline_stages s ON s.id=o.stage_id
     WHERE o.account_id=? ORDER BY o.updated_at DESC`);
-  const quotations = all(`SELECT id, quote_number, status, grand_total, currency, quote_date, valid_until
+  const quotations = all(`SELECT id, quote_number, status, grand_total, currency, quote_date, valid_until,
+                                 converted_to_document_id
                           FROM quotations WHERE account_id=? ORDER BY quote_date DESC`);
+
+  // Proforma invoices and invoices raised for this customer. Without these
+  // the 360 view stops at "we quoted them" and says nothing about whether
+  // anyone actually billed them or got paid — which is the half that matters.
+  const salesDocuments = all(`SELECT id, doc_type, doc_number, status, payment_status, grand_total,
+                                     amount_paid, balance_due, currency, doc_date, due_date, quotation_id
+                                FROM sales_documents WHERE account_id=? ORDER BY doc_date DESC`);
+  const proformaInvoices = salesDocuments.filter((d) => d.doc_type === 'proforma');
+  const invoices = salesDocuments.filter((d) => d.doc_type === 'invoice');
   const subscriptions = all(`SELECT id, subscription_number, plan, status, recurring_amount, billing_cycle, renewal_date
                              FROM subscriptions WHERE account_id=? ORDER BY renewal_date`);
   const tickets = all(`SELECT id, ticket_number, subject, status, priority, created_at, resolved_at
@@ -142,6 +186,9 @@ router.get('/accounts/:id', requirePermission('accounts', 'view'), (req, res) =>
         : s.billing_cycle === 'Quarterly' ? s.recurring_amount / 3 : s.recurring_amount || 0), 0),
     paid_total: payments.filter((p) => p.status === 'Paid').reduce((s, p) => s + (p.amount || 0), 0),
     open_quotes: quotations.filter((q) => ['Draft', 'Sent', 'Viewed'].includes(q.status)).length,
+    invoiced: liveInvoices(invoices).reduce((s, d) => s + (d.grand_total || 0), 0),
+    collected: liveInvoices(invoices).reduce((s, d) => s + (d.amount_paid || 0), 0),
+    outstanding: liveInvoices(invoices).reduce((s, d) => s + (d.balance_due || 0), 0),
   };
   commercial.arr = commercial.mrr * 12;
 
@@ -158,6 +205,16 @@ router.get('/accounts/:id', requirePermission('accounts', 'view'), (req, res) =>
   if (renewals.length) attention.push({ severity: 'medium', text: `${renewals.length} subscription(s) renewing within 30 days` });
   const staleQuotes = quotations.filter((q) => q.status === 'Sent' && q.valid_until && q.valid_until.slice(0, 10) < today);
   if (staleQuotes.length) attention.push({ severity: 'medium', text: `${staleQuotes.length} quotation(s) past their valid-until date` });
+  const overdueInvoices = liveInvoices(invoices).filter((d) => (
+    d.due_date && String(d.due_date).slice(0, 10) < today && d.payment_status !== 'Paid'
+  ));
+  if (overdueInvoices.length) {
+    const owed = overdueInvoices.reduce((s, d) => s + (d.balance_due || 0), 0);
+    attention.push({
+      severity: 'high',
+      text: `${overdueInvoices.length} overdue invoice(s) — ₹${Number(owed).toLocaleString('en-IN')} outstanding`,
+    });
+  }
   if (contacts.length === 0) attention.push({ severity: 'medium', text: 'No contacts on this account' });
   const lastTouch = timeline[0]?.at;
   if (lastTouch) {
@@ -172,6 +229,8 @@ router.get('/accounts/:id', requirePermission('accounts', 'view'), (req, res) =>
     contacts,
     opportunities,
     quotations,
+    proforma_invoices: proformaInvoices,
+    invoices,
     subscriptions,
     tickets,
     payments,
@@ -181,7 +240,7 @@ router.get('/accounts/:id', requirePermission('accounts', 'view'), (req, res) =>
     attention,
     relationship_map,
     audit,
-    next_best_actions: nextBestActions({ accountId: id, tickets, tasks, quotations, opportunities, subscriptions, contacts, timeline }),
+    next_best_actions: nextBestActions({ accountId: id, tickets, tasks, quotations, invoices, opportunities, subscriptions, contacts, timeline }),
   });
 });
 

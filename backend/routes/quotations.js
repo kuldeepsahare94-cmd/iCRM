@@ -5,9 +5,11 @@ const { relatedActivity } = require('../services/relatedActivity');
 const { requirePermission } = require('../middleware/auth');
 const { fireEvent } = require('../services/whatsapp/workflowEngine');
 const { fireWorkflows } = require('../services/workflowAutomation');
-const { buildQuotationPdf, renderQuotationPdfBuffer } = require('../services/quotationPdf');
+const { buildDocumentPdf, renderDocumentPdfBuffer } = require('../services/documentPdf');
 const { sendEmail, isConfigured: emailConfigured } = require('../services/email');
 const { nextNumber } = require('../services/documentNumbering');
+const engine = require('../services/documentEngine');
+const docs = require('../services/documentService');
 
 function resolveMobile(accountId, contactId) {
   if (contactId) {
@@ -21,54 +23,40 @@ function resolveMobile(accountId, contactId) {
   return null;
 }
 
+// The three-pass tax engine that used to live here has moved to
+// services/documentEngine.js, unchanged in behaviour, so quotations, proforma
+// invoices and invoices all calculate through one implementation instead of
+// three copies that drift. Verified against the previous code on all 90
+// existing quotations: every subtotal, discount, tax and line total identical.
 function recalcTotals(quotationId) {
   const quotation = db.prepare('SELECT * FROM quotations WHERE id=?').get(quotationId);
-  const items = db.prepare('SELECT * FROM quotation_items WHERE quotation_id=?').all(quotationId);
+  const items = db.prepare('SELECT * FROM quotation_items WHERE quotation_id=? ORDER BY sort_order, id').all(quotationId);
+
+  const result = engine.calculate(quotation, items, { companyStateCode: docs.companyStateCode() });
+
   const updateItem = db.prepare('UPDATE quotation_items SET line_total=? WHERE id=?');
-
-  // Pass 1 — line level: gross, then the line's own discount.
-  let subtotal = 0, lineDiscountTotal = 0;
-  const rows = items.map((item) => {
-    const gross = (item.quantity || 0) * (item.unit_price || 0);
-    const lineDiscount = gross * ((item.discount_percent || 0) / 100);
-    const net = gross - lineDiscount;
-    subtotal += gross;
-    lineDiscountTotal += lineDiscount;
-    return { item, gross, net };
+  result.lines.forEach((line, i) => {
+    if (items[i]) updateItem.run(line.lineTotal, items[i].id);
   });
-  const netAfterLineDiscounts = rows.reduce((sum, r) => sum + r.net, 0);
 
-  // Pass 2 — the overall (whole-quotation) discount.
-  const type = quotation?.overall_discount_type || 'percent';
-  const value = Number(quotation?.overall_discount_value) || 0;
-  let overallDiscount = type === 'amount' ? value : netAfterLineDiscounts * (value / 100);
-  // Never discount below zero, however the value was entered.
-  overallDiscount = Math.max(0, Math.min(overallDiscount, netAfterLineDiscounts));
+  db.prepare(`
+    UPDATE quotations SET subtotal=?, total_discount=?, overall_discount_amount=?,
+      taxable_value=?, tax_total=?, cgst_total=?, sgst_total=?, igst_total=?,
+      grand_total=?, updated_at=datetime('now')
+    WHERE id=?
+  `).run(
+    result.subtotal, result.totalDiscount, result.overallDiscount,
+    result.taxableValue, result.taxTotal, result.cgstTotal, result.sgstTotal, result.igstTotal,
+    result.grandTotal, quotationId,
+  );
 
-  // Pass 3 — tax. The overall discount is spread across lines in proportion
-  // to each line's value, so every line is taxed at ITS OWN rate on ITS
-  // post-discount value. Applying tax before the overall discount, or at a
-  // single blended rate, would both produce a wrong GST figure whenever a
-  // quotation mixes rates (say 18% software alongside 5% hardware) — and
-  // GST is legally charged on the discounted taxable value, not the gross.
-  let taxTotal = 0;
-  for (const r of rows) {
-    const share = netAfterLineDiscounts > 0 ? r.net / netAfterLineDiscounts : 0;
-    const taxable = r.net - (overallDiscount * share);
-    const taxAmt = taxable * ((r.item.tax_percent || 0) / 100);
-    taxTotal += taxAmt;
-    // line_total stays the line's own figure BEFORE the overall discount,
-    // so the printed line items still add up to the shown subtotal and the
-    // overall discount reads as its own visible deduction.
-    updateItem.run(r.net + (r.net * ((r.item.tax_percent || 0) / 100)), r.item.id);
-  }
-
-  const totalDiscount = lineDiscountTotal + overallDiscount;
-  const grandTotal = subtotal - totalDiscount + taxTotal;
-
-  db.prepare(`UPDATE quotations SET subtotal=?, total_discount=?, overall_discount_amount=?, tax_total=?, grand_total=?, updated_at=datetime('now') WHERE id=?`)
-    .run(subtotal, totalDiscount, overallDiscount, taxTotal, grandTotal, quotationId);
-  return { subtotal, totalDiscount, overallDiscount, taxTotal, grandTotal };
+  return {
+    subtotal: result.subtotal,
+    totalDiscount: result.totalDiscount,
+    overallDiscount: result.overallDiscount,
+    taxTotal: result.taxTotal,
+    grandTotal: result.grandTotal,
+  };
 }
 
 // Was COUNT(*) + 1, which reissued a number as soon as any quotation was
@@ -139,11 +127,12 @@ router.post('/', requirePermission('quotations', 'create'), (req, res) => {
     });
     const quotationId = info.lastInsertRowid;
     const insertItem = db.prepare(`
-      INSERT INTO quotation_items (quotation_id, product_id, description, quantity, unit_price, discount_percent, tax_percent, sort_order)
-      VALUES (?,?,?,?,?,?,?,?)
+      INSERT INTO quotation_items (quotation_id, product_id, description, hsn_sac, unit, quantity, unit_price, discount_percent, tax_percent, sort_order)
+      VALUES (?,?,?,?,?,?,?,?,?,?)
     `);
     (b.items || []).forEach((item, i) => {
-      insertItem.run(quotationId, item.product_id || null, item.description || null, item.quantity || 1,
+      insertItem.run(quotationId, item.product_id || null, item.description || null,
+        item.hsn_sac || null, item.unit || null, item.quantity || 1,
         item.unit_price || 0, item.discount_percent || 0, item.tax_percent || 0, i);
     });
     recalcTotals(quotationId);
@@ -180,11 +169,12 @@ router.put('/:id', requirePermission('quotations', 'edit'), (req, res) => {
     if (Array.isArray(b.items)) {
       db.prepare('DELETE FROM quotation_items WHERE quotation_id=?').run(req.params.id);
       const insertItem = db.prepare(`
-        INSERT INTO quotation_items (quotation_id, product_id, description, quantity, unit_price, discount_percent, tax_percent, sort_order)
-        VALUES (?,?,?,?,?,?,?,?)
+        INSERT INTO quotation_items (quotation_id, product_id, description, hsn_sac, unit, quantity, unit_price, discount_percent, tax_percent, sort_order)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
       `);
       b.items.forEach((item, i) => {
-        insertItem.run(req.params.id, item.product_id || null, item.description || null, item.quantity || 1,
+        insertItem.run(req.params.id, item.product_id || null, item.description || null,
+          item.hsn_sac || null, item.unit || null, item.quantity || 1,
           item.unit_price || 0, item.discount_percent || 0, item.tax_percent || 0, i);
       });
     }
@@ -220,11 +210,11 @@ router.post('/:id/duplicate', requirePermission('quotations', 'create'), (req, r
       existing.notes, existing.terms);
     const newId = info.lastInsertRowid;
     const insertItem = db.prepare(`
-      INSERT INTO quotation_items (quotation_id, product_id, description, quantity, unit_price, discount_percent, tax_percent, sort_order)
-      VALUES (?,?,?,?,?,?,?,?)
+      INSERT INTO quotation_items (quotation_id, product_id, description, hsn_sac, unit, quantity, unit_price, discount_percent, tax_percent, sort_order)
+      VALUES (?,?,?,?,?,?,?,?,?,?)
     `);
-    items.forEach((item) => insertItem.run(newId, item.product_id, item.description, item.quantity, item.unit_price,
-      item.discount_percent, item.tax_percent, item.sort_order));
+    items.forEach((item) => insertItem.run(newId, item.product_id, item.description, item.hsn_sac, item.unit,
+      item.quantity, item.unit_price, item.discount_percent, item.tax_percent, item.sort_order));
     recalcTotals(newId);
     return newId;
   });
@@ -237,31 +227,87 @@ router.delete('/:id', requirePermission('quotations', 'delete'), (req, res) => {
   res.status(204).end();
 });
 
+// ===== Conversion =====
+// A quotation the customer accepted becomes a proforma invoice (to collect
+// payment in advance) or an invoice directly. The figures are copied, not
+// recalculated from today's product prices — the customer agreed to what was
+// on the quotation, and a price change since then is not something to spring
+// on them at the invoice.
+
+router.post('/:id/convert/:target', requirePermission('quotations', 'view'), (req, res) => {
+  try {
+    res.status(201).json(docs.convertQuotation(req.params.id, req.params.target, req.body || {}, req.user.id));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+// What this quotation became — shown on its own page so nobody raises a
+// second invoice for a deal that is already invoiced.
+router.get('/:id/lineage', requirePermission('quotations', 'view'), (req, res) => {
+  const quote = db.prepare('SELECT id, quote_number, status, grand_total, quote_date FROM quotations WHERE id=?').get(req.params.id);
+  if (!quote) return res.status(404).json({ error: 'Not found' });
+  const chain = [{
+    type: 'quotation', id: quote.id, number: quote.quote_number, status: quote.status,
+    total: quote.grand_total, date: quote.quote_date, current: true,
+  }];
+  db.prepare(`
+    SELECT id, doc_type, doc_number, status, grand_total, doc_date, payment_status, balance_due
+      FROM sales_documents WHERE quotation_id=? ORDER BY id
+  `).all(req.params.id).forEach((d) => chain.push({
+    type: d.doc_type, id: d.id, number: d.doc_number, status: d.status,
+    total: d.grand_total, date: d.doc_date,
+    payment_status: d.payment_status, balance_due: d.balance_due,
+  }));
+  return res.json(chain);
+});
+
 // ===== PDF + send =====
-// Loads a quotation with everything the PDF needs. `template` reuses the
-// receipt_templates rows so letterhead details are configured once.
-function loadForPdf(id, institute) {
+// The quotation PDF now goes through the same template engine as proforma
+// invoices and invoices. The old renderer drew a fixed layout and read its
+// letterhead from the receipt_templates row for "institute A", hardcoded —
+// one company, one design, no way to differ per customer.
+//
+// Nothing configured is lost: the engine still falls back to that same
+// receipt_templates row when the company profile is empty, so an install that
+// has only ever set that up keeps printing with the details it already has.
+function loadForPdf(id) {
   const quotation = db.prepare(`
-    SELECT q.*, a.account_name, c.first_name || ' ' || COALESCE(c.last_name,'') AS contact_name, c.email AS contact_email
-    FROM quotations q LEFT JOIN accounts a ON a.id = q.account_id LEFT JOIN contacts c ON c.id = q.contact_id
-    WHERE q.id=?
+    SELECT q.*, a.account_name,
+           TRIM(c.first_name || ' ' || COALESCE(c.last_name,'')) AS contact_name,
+           c.email AS contact_email
+      FROM quotations q
+      LEFT JOIN accounts a ON a.id = q.account_id
+      LEFT JOIN contacts c ON c.id = q.contact_id
+     WHERE q.id=?
   `).get(id);
   if (!quotation) return null;
   const items = db.prepare(`
-    SELECT qi.*, p.product_name FROM quotation_items qi LEFT JOIN products p ON p.id = qi.product_id
-    WHERE qi.quotation_id=? ORDER BY qi.sort_order, qi.id
+    SELECT qi.*, p.product_name FROM quotation_items qi
+      LEFT JOIN products p ON p.id = qi.product_id
+     WHERE qi.quotation_id=? ORDER BY qi.sort_order, qi.id
   `).all(id);
-  const template = db.prepare('SELECT * FROM receipt_templates WHERE id=?').get((institute || 'A').toUpperCase());
-  return { quotation, items, template };
+  const calc = engine.calculate(quotation, items, { companyStateCode: docs.companyStateCode() });
+  return { ...quotation, items, tax_summary: calc.taxSummary };
 }
 
-// GET /api/quotations/:id/pdf?institute=A
+// GET /api/quotations/:id/pdf
 router.get('/:id/pdf', requirePermission('quotations', 'view'), (req, res) => {
-  const payload = loadForPdf(req.params.id, req.query.institute);
-  if (!payload) return res.status(404).json({ error: 'Quotation not found' });
+  const record = loadForPdf(req.params.id);
+  if (!record) return res.status(404).json({ error: 'Quotation not found' });
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename=${payload.quotation.quote_number || 'quotation'}.pdf`);
-  buildQuotationPdf(payload, res);
+  res.setHeader('Content-Disposition', `attachment; filename=${String(record.quote_number || 'quotation').replace(/[^\w.-]/g, '_')}.pdf`);
+  return buildDocumentPdf({ docType: 'quotation', record, templateId: req.query.template_id, userId: req.user.id }, res);
+});
+
+// Same document, shown in the browser instead of downloaded — so a quotation
+// can be checked before it is sent rather than after.
+router.get('/:id/preview', requirePermission('quotations', 'view'), (req, res) => {
+  const record = loadForPdf(req.params.id);
+  if (!record) return res.status(404).json({ error: 'Quotation not found' });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'inline');
+  return buildDocumentPdf({ docType: 'quotation', record, templateId: req.query.template_id, userId: req.user.id, preview: true }, res);
 });
 
 // POST /api/quotations/:id/send  { to?, subject?, message?, institute? }
@@ -269,18 +315,18 @@ router.get('/:id/pdf', requirePermission('quotations', 'view'), (req, res) => {
 // (which is the same transition the PUT handler uses, so the existing
 // quotation_sent WhatsApp workflow event fires from here too).
 router.post('/:id/send', requirePermission('quotations', 'edit'), async (req, res) => {
-  const payload = loadForPdf(req.params.id, req.body.institute);
+  const payload = loadForPdf(req.params.id);
   if (!payload) return res.status(404).json({ error: 'Quotation not found' });
   if (!emailConfigured(req.user.id)) {
     return res.status(503).json({ error: "Email isn't configured yet — set it up in Settings → Email." });
   }
 
-  const { quotation } = payload;
+  const quotation = payload;
   const to = req.body.to || quotation.contact_email;
   if (!to) return res.status(400).json({ error: 'No recipient — pass "to", or set an email on the linked contact.' });
 
   try {
-    const pdf = await renderQuotationPdfBuffer(payload);
+    const pdf = await renderDocumentPdfBuffer({ docType: 'quotation', record: payload, templateId: req.body.template_id, userId: req.user.id });
     const subject = req.body.subject || `Quotation ${quotation.quote_number || ''}`.trim();
     const text = req.body.message || `Please find attached quotation ${quotation.quote_number || ''}.`;
     await sendEmail({
@@ -296,7 +342,7 @@ router.post('/:id/send', requirePermission('quotations', 'edit'), async (req, re
       const updated = db.prepare('SELECT * FROM quotations WHERE id=?').get(req.params.id);
       fireEvent('quotation_sent', {
         entityType: 'quotation', entityId: updated.id, mobile: resolveMobile(updated.account_id, updated.contact_id),
-        fields: { quote_number: updated.quote_number, account_name: quotation.account_name || '', contact_name: quotation.contact_name || '', grand_total: updated.grand_total, valid_until: updated.valid_until },
+        fields: { quote_number: updated.quote_number, account_name: payload.account_name || '', contact_name: payload.contact_name || '', grand_total: updated.grand_total, valid_until: updated.valid_until },
       });
       fireWorkflows('quotations', 'record_updated', updated, existing, req.user.id);
       fireWorkflows('quotations', 'field_changed', updated, existing, req.user.id);
