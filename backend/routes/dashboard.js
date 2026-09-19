@@ -114,16 +114,29 @@ router.get('/crm', requireAuth, (req, res) => {
   // CRM today?" rather than only showing totals. All real data.
 
   // Today's agenda — what actually needs doing, not a generic counter.
+  //
+  // Six rows each, deliberately. The dashboard shows five and a "view all"
+  // link, so six is enough to know a sixth exists without shipping a list
+  // nobody reads: with 66 tasks due, the old LIMIT 10 sent ten rows that
+  // stretched the card to ten rows tall and pushed everything below it off
+  // the screen. How many there really are is answered by agenda_counts,
+  // which costs three COUNT(*)s rather than the rows themselves.
   const agenda = {
     follow_ups: db.prepare(`
       SELECT id, student_name AS title, mobile, status, follow_up_date
-      FROM leads WHERE date(follow_up_date) = date(?) ORDER BY student_name LIMIT 10`).all(today),
+      FROM leads WHERE date(follow_up_date) = date(?) ORDER BY student_name LIMIT 6`).all(today),
     meetings: db.prepare(`
       SELECT id, meeting_title AS title, start_datetime, related_module, related_record_id
-      FROM meetings WHERE date(COALESCE(start_datetime, created_at)) = date(?) ORDER BY start_datetime LIMIT 10`).all(today),
+      FROM meetings WHERE date(COALESCE(start_datetime, created_at)) = date(?) ORDER BY start_datetime LIMIT 6`).all(today),
     tasks_due: db.prepare(`
       SELECT id, task_title AS title, priority, due_date, related_module, related_record_id
-      FROM tasks WHERE status != 'Completed' AND date(due_date) <= date(?) ORDER BY due_date LIMIT 10`).all(today),
+      FROM tasks WHERE status != 'Completed' AND date(due_date) <= date(?) ORDER BY due_date LIMIT 6`).all(today),
+  };
+
+  const agenda_counts = {
+    follow_ups: count('SELECT COUNT(*) c FROM leads WHERE date(follow_up_date) = date(?)', today),
+    meetings: count('SELECT COUNT(*) c FROM meetings WHERE date(COALESCE(start_datetime, created_at)) = date(?)', today),
+    tasks_due: count(`SELECT COUNT(*) c FROM tasks WHERE status != 'Completed' AND date(due_date) <= date(?)`, today),
   };
 
   // Win rate over closed deals only — including open deals in the
@@ -144,6 +157,66 @@ router.get('/crm', requireAuth, (req, res) => {
           JOIN module_pipeline_stages s ON s.id=o.stage_id WHERE s.is_won=1`).get().v)
       : 0,
   };
+
+  // ---- Money actually collected, not just money invoiced ------------------
+  // A pipeline figure is a forecast; this is the only block on the dashboard
+  // that reports cash. `balance_due` is maintained by documentPayments on
+  // every recorded payment, so it's authoritative rather than re-derived
+  // here. Cancelled invoices are excluded — an invoice that was voided was
+  // never owed, and counting it would inflate outstanding forever.
+  const collections = (() => {
+    const totals = db.prepare(`
+      SELECT COALESCE(SUM(grand_total), 0) invoiced,
+             COALESCE(SUM(amount_paid), 0) collected,
+             COALESCE(SUM(balance_due), 0) outstanding,
+             COUNT(*) c
+      FROM sales_documents
+      WHERE doc_type = 'invoice' AND COALESCE(status, '') != 'Cancelled'`).get();
+    const overdue = db.prepare(`
+      SELECT COALESCE(SUM(balance_due), 0) amount, COUNT(*) c
+      FROM sales_documents
+      WHERE doc_type = 'invoice' AND COALESCE(status, '') != 'Cancelled'
+        AND COALESCE(balance_due, 0) > 0
+        AND due_date IS NOT NULL AND date(due_date) < date(?)`).get(today);
+    return {
+      invoiced: totals.invoiced,
+      collected: totals.collected,
+      outstanding: totals.outstanding,
+      invoice_count: totals.c,
+      overdue_amount: overdue.amount,
+      overdue_count: overdue.c,
+      // Share of everything invoiced that has actually come in. null (not 0)
+      // when nothing has been invoiced at all, so the UI can say "no
+      // invoices yet" instead of showing a 0% that looks like a collections
+      // failure.
+      collected_pct: totals.invoiced > 0 ? Math.round((totals.collected / totals.invoiced) * 1000) / 10 : null,
+    };
+  })();
+
+  // ---- Who is actually closing business ------------------------------------
+  // Grouped by owner_id (not name) so two people who happen to share a
+  // display name stay separate rows, and ordered by value rather than count
+  // — five small wins is not the same contribution as one large one.
+  const leaderboard = db.prepare(`
+    SELECT COALESCE(u.full_name, u.username, 'Unassigned') AS name,
+           COUNT(o.id) AS won,
+           COALESCE(SUM(o.amount), 0) AS value
+    FROM opportunities o
+    JOIN module_pipeline_stages s ON s.id = o.stage_id AND s.is_won = 1
+    LEFT JOIN users u ON u.id = o.owner_id
+    GROUP BY o.owner_id
+    ORDER BY value DESC
+    LIMIT 5`).all();
+
+  // ---- Support load, open tickets only -------------------------------------
+  // Ordered by how much they should worry someone rather than alphabetically,
+  // so Urgent is never buried under Low.
+  const PRIORITY_RANK = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
+  const ticket_load = db.prepare(`
+    SELECT COALESCE(priority, 'Unset') AS priority, COUNT(*) c
+    FROM tickets WHERE status NOT IN ('Resolved', 'Closed')
+    GROUP BY priority`).all()
+    .sort((a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9));
 
   // Things that need a human decision, ranked.
   const attention = [];
@@ -216,7 +289,11 @@ router.get('/crm', requireAuth, (req, res) => {
     })(),
   };
 
-  res.json({ cards, trends, agenda, performance, attention, leads_by_source, opportunities_by_stage, revenue_by_month, recent_activities });
+  res.json({
+    cards, trends, agenda, agenda_counts, performance, attention,
+    collections, leaderboard, ticket_load,
+    leads_by_source, opportunities_by_stage, revenue_by_month, recent_activities,
+  });
 });
 
 module.exports = router;
