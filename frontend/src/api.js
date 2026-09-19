@@ -230,6 +230,7 @@ export const api = {
   seedDemoData: () => req('POST', '/dev/seed-demo-data'),
   demoDataStatus: () => req('GET', '/dev/demo-data'),
   wipeDemoData: () => req('DELETE', '/dev/demo-data'),
+  repairPermissions: () => req('POST', '/dev/repair-permissions'),
 
   // WhatsApp integrations
   waProviderTypes: () => req('GET', '/whatsapp/provider-types'),

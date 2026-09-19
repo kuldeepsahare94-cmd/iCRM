@@ -166,6 +166,21 @@ export default function Settings() {
     }
   };
 
+  const [repairing, setRepairing] = useState(false);
+  const [repairResult, setRepairResult] = useState(null);
+  const repairPermissions = async () => {
+    setRepairing(true);
+    setRepairResult(null);
+    try {
+      const res = await api.repairPermissions();
+      setRepairResult(res);
+    } catch (err) {
+      alert('Could not repair permissions: ' + err.message);
+    } finally {
+      setRepairing(false);
+    }
+  };
+
   const [wiping, setWiping] = useState(false);
   const wipeDemoData = async () => {
     if (!confirm('Remove every demo record?\n\nAnything you entered yourself stays exactly as it is.')) return;
@@ -385,6 +400,32 @@ export default function Settings() {
         </Link>
       )}
 
+
+      {can('settings', 'edit') && (
+        <div className="card p-5 mt-4 flex items-center justify-between flex-wrap gap-3" style={{ background: 'var(--color-warning-soft)', borderColor: '#FDE68A' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-ink">Don't see Company Profile or Document Templates below?</h2>
+              <p className="text-xs text-slate-500 mt-0.5 max-w-2xl">
+                Those two screens ship behind their own permission, added after roles were first set
+                up — on some installs that permission never got granted to any role. This checks
+                Super Admin and Admin and switches full access on for both, in one click. Safe to
+                run any time, including if everything already looks fine.
+              </p>
+              {repairResult && (
+                <p className="text-xs text-good mt-2">{repairResult.message}</p>
+              )}
+            </div>
+          </div>
+          <button onClick={repairPermissions} disabled={repairing}
+            className="text-sm font-medium px-4 py-2 rounded-lg border border-amber-300 bg-white text-amber-700 hover:bg-amber-50 disabled:opacity-60 shrink-0">
+            {repairing ? 'Checking…' : 'Fix access now'}
+          </button>
+        </div>
+      )}
 
       {can('settings', 'edit') && (
         <Link to="/settings/company"

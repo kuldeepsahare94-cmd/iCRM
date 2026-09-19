@@ -9,10 +9,16 @@ import { PageHeader } from '../components/ui';
 // This list is hand-maintained, so a new permission surface has to be added
 // here too — otherwise the permission exists in the database but there is no
 // row in this matrix to switch it on or off, which is how `chat` was
-// initially missed.
-const MODULES = ['leads', 'accounts', 'contacts', 'opportunities', 'quotations', 'products',
-  'subscriptions', 'tickets', 'calls', 'meetings', 'tasks', 'notes', 'emails', 'payments',
-  'documents', 'teams', 'workflows', 'reports', 'users', 'chat', 'calendar', 'settings'];
+// initially missed, and how `proforma_invoices` / `invoices` /
+// `document_templates` were missed when the documents feature shipped: the
+// backend granted the permission rows correctly, but nothing in this screen
+// could display or edit them, so a role that genuinely needed adjusting here
+// had no way to.
+const MODULES = ['leads', 'accounts', 'contacts', 'opportunities', 'quotations', 'proforma_invoices',
+  'invoices', 'document_templates', 'products', 'subscriptions', 'tickets', 'calls', 'meetings',
+  'tasks', 'notes', 'emails', 'payments', 'documents', 'teams', 'workflows', 'reports', 'users',
+  'chat', 'calendar', 'settings'];
+const MODULE_LABEL = { proforma_invoices: 'Proforma Invoices', document_templates: 'Document Templates' };
 const ACTIONS = ['view', 'create', 'edit', 'delete', 'export'];
 const ACTION_KEYS = { view: 'can_view', create: 'can_create', edit: 'can_edit', delete: 'can_delete', export: 'can_export' };
 
@@ -107,7 +113,7 @@ export default function Roles() {
             <tbody>
               {MODULES.map((mod) => (
                 <tr key={mod} className="border-b border-line/60">
-                  <td className="py-2.5 px-4 text-ink font-medium">{titleCase(mod)}</td>
+                  <td className="py-2.5 px-4 text-ink font-medium">{MODULE_LABEL[mod] || titleCase(mod)}</td>
                   {ACTIONS.map((a) => (
                     <td key={a} className="py-2.5 px-4 text-center">
                       <input type="checkbox" checked={!!matrix[mod]?.[a]} onChange={() => toggle(mod, a)}
