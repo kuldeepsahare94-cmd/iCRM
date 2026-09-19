@@ -308,6 +308,58 @@ export const api = {
   lookupSearch: (module, q, limit) => req('GET', `/search/lookup/${module}` + qs({ q, limit })),
   lookupResolve: (module, ids) => req('GET', `/search/lookup/${module}` + qs({ ids: ids.join(',') })),
 
+  // Sales documents — proforma invoices and invoices share one router, so
+  // `base` is '/proforma-invoices' or '/invoices' (and '/quotations', which
+  // supports the same PDF, preview and convert actions).
+  documentLineage: (moduleApiName, id) => req('GET', `/${moduleApiName}/${id}/lineage`),
+  convertDocument: (base, id, target) => req('POST', `${base}/${id}/convert/${target}`, {}),
+  sendDocument: (base, id, body) => req('POST', `${base}/${id}/send`, body),
+  documentSummary: (base) => req('GET', `${base}/summary/stats`),
+
+  // The PDF is fetched WITH the auth header and handed back as a blob. A
+  // window.open of the URL would carry no header and show a 401 body instead.
+  documentPdfBlob: async (base, id, templateId) => {
+    const token = localStorage.getItem('cd_token');
+    const res = await fetch(`${BASE}${base}/${id}/preview${templateId ? `?template_id=${templateId}` : ''}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Could not build the document (${res.status})`);
+    return res.blob();
+  },
+
+  recordInvoicePayment: (invoiceId, body) => req('POST', `/invoices/${invoiceId}/payments`, body),
+  updateInvoicePayment: (invoiceId, paymentId, body) => req('PUT', `/invoices/${invoiceId}/payments/${paymentId}`, body),
+  deleteInvoicePayment: (invoiceId, paymentId) => req('DELETE', `/invoices/${invoiceId}/payments/${paymentId}`),
+
+  // Document templates
+  listDocumentTemplates: (params) => req('GET', '/document-templates' + qs(params)),
+  getDocumentTemplate: (id) => req('GET', `/document-templates/${id}`),
+  createDocumentTemplate: (body) => req('POST', '/document-templates', body),
+  updateDocumentTemplate: (id, body) => req('PUT', `/document-templates/${id}`, body),
+  duplicateDocumentTemplate: (id, body) => req('POST', `/document-templates/${id}/duplicate`, body || {}),
+  deleteDocumentTemplate: (id) => req('DELETE', `/document-templates/${id}`),
+  makeTemplateDefault: (id) => req('POST', `/document-templates/${id}/default`, {}),
+  restoreTemplateVersion: (id, version) => req('POST', `/document-templates/${id}/restore/${version}`, {}),
+  templateCatalog: () => req('GET', '/document-templates/catalog'),
+  templatePreviewBlob: async (body) => {
+    const token = localStorage.getItem('cd_token');
+    const res = await fetch(`${BASE}/document-templates/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      let message = `Preview failed (${res.status})`;
+      try { const d = await res.json(); if (d?.error) message = d.error; } catch { /* keep status */ }
+      throw new Error(message);
+    }
+    return res.blob();
+  },
+
+  // Company profile — the letterhead every document prints with
+  getCompanyProfile: () => req('GET', '/company-profile'),
+  updateCompanyProfile: (body) => req('PUT', '/company-profile', body),
+
   // Settings → Document Numbering
   listDocumentSequences: () => req('GET', '/document-numbering'),
   previewDocumentSequence: (docType, body) => req('POST', `/document-numbering/${docType}/preview`, body),

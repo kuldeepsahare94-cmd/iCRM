@@ -56,6 +56,36 @@ export const LIST_KPIS = {
       filter: (r) => r.status === 'Accepted' },
     { label: 'Total value', icon: IndianRupee, value: inr(sum(rows, () => true, (r) => r.grand_total)), tone: 'special' },
   ],
+  // A proforma is a request for payment that has not been accepted yet, so
+  // what matters is how much is sitting unconverted, not how many exist.
+  proforma_invoices: (rows) => [
+    { label: 'Proformas', icon: FileText, value: rows.length, tone: 'info' },
+    { label: 'Awaiting', icon: Clock,
+      value: count(rows, (r) => !['Converted', 'Cancelled', 'Expired'].includes(r.status)), tone: 'warning',
+      filter: (r) => !['Converted', 'Cancelled', 'Expired'].includes(r.status) },
+    { label: 'Converted', icon: CheckCircle2, value: count(rows, (r) => r.status === 'Converted'), tone: 'success',
+      filter: (r) => r.status === 'Converted' },
+    { label: 'Value awaiting', icon: IndianRupee,
+      value: inr(sum(rows, (r) => !['Converted', 'Cancelled', 'Expired'].includes(r.status), (r) => r.grand_total)),
+      tone: 'special' },
+  ],
+
+  // For invoices the question is never "how many" — it is how much is owed
+  // and how much of that is late. Overdue is derived from the due date rather
+  // than the status, so it is right even before the nightly sweep has run.
+  invoices: (rows) => {
+    const live = (r) => !['Cancelled', 'Draft', 'Written Off'].includes(r.status);
+    const overdue = (r) => live(r) && r.due_date && String(r.due_date).slice(0, 10) < today() && r.payment_status !== 'Paid';
+    return [
+      { label: 'Invoiced', icon: FileText, value: inr(sum(rows, live, (r) => r.grand_total)), tone: 'info' },
+      { label: 'Collected', icon: Wallet, value: inr(sum(rows, live, (r) => r.amount_paid)), tone: 'success' },
+      { label: 'Outstanding', icon: Clock, value: inr(sum(rows, live, (r) => r.balance_due)), tone: 'warning',
+        filter: (r) => live(r) && r.payment_status !== 'Paid' },
+      { label: 'Overdue', icon: AlertTriangle, value: inr(sum(rows, overdue, (r) => r.balance_due)), tone: 'danger',
+        filter: overdue },
+    ];
+  },
+
   subscriptions: (rows) => [
     { label: 'Subscriptions', icon: Repeat, value: rows.length, tone: 'info' },
     { label: 'Active', icon: CheckCircle2, value: count(rows, (r) => r.status === 'Active'), tone: 'success' },

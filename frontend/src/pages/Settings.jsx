@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarDays, Settings as SettingsIcon, Plus, Trash2, Sparkles, Database, ShieldCheck, Boxes, Zap, GitBranch, Users2, History, Percent, Mail, LayoutList, Check, AlertTriangle } from 'lucide-react';
+import { CalendarDays, Settings as SettingsIcon, Plus, Trash2, Sparkles, Database, ShieldCheck, Boxes, Zap, GitBranch, Users2, History, Percent, Mail, LayoutList, Check, AlertTriangle, Building2, LayoutTemplate } from 'lucide-react';
 import { api } from '../api';
 import { usePermissions } from '../context/usePermissions';
 
@@ -351,6 +351,42 @@ export default function Settings() {
         </Link>
       )}
 
+
+      {can('settings', 'edit') && (
+        <Link to="/settings/company"
+          className="card p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-ink">Company Profile</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Letterhead, GSTIN, bank details and signature — printed on every quotation and invoice.
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-amber shrink-0">Open →</span>
+        </Link>
+      )}
+
+      {can('document_templates', 'view') && (
+        <Link to="/settings/templates"
+          className="card p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+              <LayoutTemplate className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-ink">Document Templates</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Design how quotations, proformas and invoices look. No code, with a live preview.
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-amber shrink-0">Open →</span>
+        </Link>
+      )}
 
       {/* Ungated like Email: connecting a calendar is a personal setting, not
           an administrative one — every user manages their own. */}

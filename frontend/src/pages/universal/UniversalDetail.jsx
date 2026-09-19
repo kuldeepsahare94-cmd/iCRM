@@ -6,13 +6,20 @@ import { usePermissions } from '../../context/usePermissions';
 import StatusBadge from '../../components/StatusBadge';
 import { friendlyError } from '../../components/ui';
 import { getFieldValue, formatFieldValue, renderFieldValue, FieldInput, recordTitle } from './fieldUtils';
+
 import { computeFollowupStatus, findFollowupField } from './followupUtils';
 import AddRelatedModal, { canCreateRelation, relationTargetModule } from './AddRelatedModal';
 import WhatsAppTemplateModal from '../../components/WhatsAppTemplateModal';
 import { accentFor } from '../../theme/moduleAccents';
 import { avatarGradientFor, initialsOf } from '../../theme/avatarColors';
 import DisposeLeadModal from '../../components/DisposeLeadModal';
-import QuotationItemsPanel from './QuotationItemsPanel';
+import DocumentItemsPanel from './DocumentItemsPanel';
+import DocumentActionsPanel from './DocumentActionsPanel';
+import DocumentPaymentsPanel from './DocumentPaymentsPanel';
+
+// Modules whose records are sales documents: line items, a PDF, a place in a
+// conversion chain.
+const SALES_DOCUMENT_MODULES = new Set(['quotations', 'proforma_invoices', 'invoices']);
 
 // Any array-of-objects the dedicated module route embeds in its detail
 // response (e.g. Accounts embeds contacts/opportunities/quotations/...) is
@@ -417,69 +424,6 @@ function DocumentsPanel({ moduleApiName, recordId }) {
         </div>
       )}
       {docs.length === 0 && <p className="text-xs text-slate-400 mt-3">Nothing attached yet.</p>}
-    </div>
-  );
-}
-
-function QuotationActionsPanel({ recordId, record, onUpdated }) {
-  const [sending, setSending] = useState(false);
-  const [showSend, setShowSend] = useState(false);
-  const [to, setTo] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [sentTo, setSentTo] = useState('');
-
-  const send = async (e) => {
-    e.preventDefault();
-    setSending(true);
-    setError('');
-    try {
-      const r = await api.sendQuotation(recordId, { to: to || undefined, message: message || undefined });
-      setSentTo(r.sent_to);
-      setShowSend(false);
-      onUpdated();
-    } catch (err) {
-      setError(friendlyError(err).message);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <div className="card p-4 mb-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-ink">
-          <FileText className="w-4 h-4 text-amber" /> Quotation document
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => api.downloadQuotationPdf(recordId, 'A').catch((e) => setError(e.message))}
-            className="text-xs border border-line rounded-lg px-3 py-1.5 hover:bg-canvas inline-flex items-center gap-1.5">
-            <Download className="w-3.5 h-3.5" /> Download PDF
-          </button>
-          <button onClick={() => setShowSend((s) => !s)}
-            className="text-xs bg-amber text-white rounded-lg px-3 py-1.5 hover:opacity-90 inline-flex items-center gap-1.5">
-            <Send className="w-3.5 h-3.5" /> Email quote
-          </button>
-        </div>
-      </div>
-
-      {sentTo && <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mt-3">Sent to {sentTo}.</div>}
-      {error && <div className="text-xs text-warn bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-3">{error}</div>}
-
-      {showSend && (
-        <form onSubmit={send} className="mt-3 pt-3 border-t border-line space-y-2">
-          <input type="email" value={to} onChange={(e) => setTo(e.target.value)}
-            placeholder={record?.contact_email ? `Default: ${record.contact_email}` : 'Recipient email'}
-            className="border border-line rounded-lg px-3 py-1.5 text-sm w-full" />
-          <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={2}
-            placeholder="Optional message to include in the email"
-            className="border border-line rounded-lg px-3 py-1.5 text-sm w-full" />
-          <button type="submit" disabled={sending}
-            className="bg-amber text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-50">
-            {sending ? 'Sending…' : 'Send with PDF attached'}
-          </button>
-        </form>
-      )}
     </div>
   );
 }
@@ -962,16 +906,40 @@ export default function UniversalDetail() {
         </div>
       </div>
 
-      {module.api_name === 'quotations' && (
+      {/* Sales documents — quotations, proforma invoices and invoices — all
+          carry line items, a PDF, and a place in a conversion chain. They get
+          the same three panels, driven by which module this is rather than by
+          three separate special cases. */}
+      {SALES_DOCUMENT_MODULES.has(module.api_name) && (
         <div className="mb-5">
-          <QuotationItemsPanel quotationId={id} currency={record.currency}
-            canEdit={can('quotations', 'edit')} onSaved={load} />
+          <DocumentItemsPanel
+            module={module}
+            recordId={id}
+            currency={record.currency}
+            // HSN/SAC and Unit are legally required on a tax invoice and just
+            // clutter on a quotation, so they appear only where they matter.
+            showTaxColumns={module.api_name !== 'quotations'}
+            canEdit={can(module.api_name, 'edit') && !(record.amount_paid > 0)}
+            onSaved={load} />
+          {record.amount_paid > 0 && (
+            <p className="t-meta mt-2">
+              Amounts are locked because a payment has been recorded against this invoice.
+            </p>
+          )}
         </div>
       )}
 
       <FollowUpPanel module={module} fields={fields} record={record} onUpdated={load} />
 
-      {module.api_name === 'quotations' && <QuotationActionsPanel recordId={id} record={record} onUpdated={load} />}
+      {module.api_name === 'invoices' && (
+        <DocumentPaymentsPanel invoiceId={id} record={record}
+          canEdit={can('payments', 'create')} onUpdated={load} />
+      )}
+
+      {SALES_DOCUMENT_MODULES.has(module.api_name) && (
+        <DocumentActionsPanel module={module} record={record}
+          canEdit={can(module.api_name, 'edit')} onUpdated={load} />
+      )}
 
       <AiAnalysisPanel moduleApiName={module.api_name} recordId={id} />
 

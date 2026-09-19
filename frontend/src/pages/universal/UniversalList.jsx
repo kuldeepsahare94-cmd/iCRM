@@ -80,7 +80,11 @@ export default function UniversalList() {
   const [quoteItems, setQuoteItems] = useState([]);
   const [discountType, setDiscountType] = useState('percent');
   const [discountValue, setDiscountValue] = useState(0);
-  const isQuotations = moduleApiName === 'quotations';
+  // Quotations, proforma invoices and invoices are all built the same way:
+  // a header form plus line items, saved together. The create form offers the
+  // line-item editor for all three rather than for quotations alone.
+  const SALES_DOCUMENTS = ['quotations', 'proforma_invoices', 'invoices'];
+  const isQuotations = SALES_DOCUMENTS.includes(moduleApiName);
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');

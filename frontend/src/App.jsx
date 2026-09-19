@@ -21,6 +21,7 @@ const LeadDetail = lazy(() => import('./pages/LeadDetail'));
 const Payments = lazy(() => import('./pages/Payments'));
 const Reports = lazy(() => import('./pages/Reports'));
 const CalendarPage = lazy(() => import('./pages/Calendar'));
+const ExtensionScreen = lazy(() => import('./extensions/ExtensionScreen'));
 const SettingsCalendar = lazy(() => import('./pages/SettingsCalendar'));
 const Roles = lazy(() => import('./pages/Roles'));
 const Users = lazy(() => import('./pages/Users'));
@@ -32,6 +33,8 @@ const SettingsPipelines = lazy(() => import('./pages/SettingsPipelines'));
 const SettingsTeams = lazy(() => import('./pages/SettingsTeams'));
 const SettingsData = lazy(() => import('./pages/SettingsData'));
 const SettingsFinance = lazy(() => import('./pages/SettingsFinance'));
+const SettingsCompany = lazy(() => import('./pages/SettingsCompany'));
+const SettingsTemplates = lazy(() => import('./pages/SettingsTemplates'));
 const CallReports = lazy(() => import('./pages/CallReports'));
 const Customer360 = lazy(() => import('./pages/Customer360'));
 const SettingsEmail = lazy(() => import('./pages/SettingsEmail'));
@@ -87,6 +90,8 @@ export default function App() {
               <Route path="/settings/teams" element={<SettingsTeams />} />
               <Route path="/settings/data" element={<SettingsData />} />
               <Route path="/settings/finance" element={<SettingsFinance />} />
+              <Route path="/settings/company" element={<SettingsCompany />} />
+              <Route path="/settings/templates" element={<SettingsTemplates />} />
               <Route path="/settings/email" element={<SettingsEmail />} />
               <Route path="/inbox" element={<Inbox />} />
               <Route path="/email-campaigns" element={<EmailCampaigns />} />
@@ -108,6 +113,10 @@ export default function App() {
               {/* Catch-all: without this, any unmatched path renders an
                   empty tree, which looks identical to a crashed app. */}
               <Route path="/calendar" element={<CalendarPage />} />
+          {/* Screens from features built for this customer only. One route
+              serves them all; which exist is decided at runtime by what is
+              installed on this customer's server. */}
+          <Route path="/x/:route" element={<ExtensionScreen />} />
           <Route path="/settings/calendar" element={<SettingsCalendar />} />
           <Route path="*" element={<NotFound />} />
             </Route>
