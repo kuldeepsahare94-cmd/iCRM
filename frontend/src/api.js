@@ -226,8 +226,10 @@ export const api = {
   confirmAssistantAction: (id, approve) => req('POST', `/assistant/conversations/${id}/confirm`, { approve }),
   assistantAuditLog: () => req('GET', '/assistant/audit-log'),
 
-  // dev
+  // demo data
   seedDemoData: () => req('POST', '/dev/seed-demo-data'),
+  demoDataStatus: () => req('GET', '/dev/demo-data'),
+  wipeDemoData: () => req('DELETE', '/dev/demo-data'),
 
   // WhatsApp integrations
   waProviderTypes: () => req('GET', '/whatsapp/provider-types'),

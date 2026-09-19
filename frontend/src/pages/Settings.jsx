@@ -141,19 +141,53 @@ export default function Settings() {
   const load = () => api.listReceiptTemplates().then(setTemplates);
   useEffect(() => { load(); }, []);
 
+  // What is loaded right now, so the panel can say so instead of leaving the
+  // admin to press the button and find out.
+  const [demoStatus, setDemoStatus] = useState(null);
+  const loadDemoStatus = () => api.demoDataStatus().then(setDemoStatus).catch(() => {});
+  useEffect(() => { loadDemoStatus(); }, []);
+
   const seedDemoData = async () => {
-    if (!confirm('This will add sample leads, students, courses, admissions, payments, companies, and placements. Continue?')) return;
+    const already = demoStatus?.loaded;
+    const warning = already
+      ? 'Demo data is already loaded. This will clear it and build a fresh set.\n\nRecords you entered yourself are not touched. Continue?'
+      : 'This fills every module with about a year of sample data — customers, deals, quotations, proforma invoices, invoices, payments, tickets and activity history.\n\nYou can remove all of it again with one click. Continue?';
+    if (!confirm(warning)) return;
     setSeeding(true);
     setSeedResult(null);
     try {
       const res = await api.seedDemoData();
       setSeedResult(res);
+      loadDemoStatus();
     } catch (err) {
       alert('Could not load demo data: ' + err.message);
     } finally {
       setSeeding(false);
     }
   };
+
+  const [wiping, setWiping] = useState(false);
+  const wipeDemoData = async () => {
+    if (!confirm('Remove every demo record?\n\nAnything you entered yourself stays exactly as it is.')) return;
+    setWiping(true);
+    setSeedResult(null);
+    try {
+      const res = await api.wipeDemoData();
+      setSeedResult(res);
+      loadDemoStatus();
+    } catch (err) {
+      alert('Could not remove demo data: ' + err.message);
+    } finally {
+      setWiping(false);
+    }
+  };
+
+  // "42 accounts, 130 leads, 66 invoices…" — ordered the way someone walking
+  // through the sidebar would meet them, not alphabetically.
+  const DEMO_ORDER = ['leads', 'accounts', 'contacts', 'opportunities', 'quotations',
+    'proforma_invoices', 'invoices', 'payments', 'products', 'subscriptions', 'tickets',
+    'calls', 'meetings', 'tasks', 'notes', 'emails', 'documents'];
+  const demoLabel = (k) => k.replace(/_/g, ' ');
 
   const [downloading, setDownloading] = useState(false);
   const [emailingBackup, setEmailingBackup] = useState(false);
@@ -429,21 +463,49 @@ export default function Settings() {
               <Database className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-ink">Load Demo Data</h2>
+              <h2 className="text-sm font-semibold text-ink">Demo Data</h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Adds sample leads, courses, students, admissions, payments, companies &amp; placements so every module has something to view.
-                {seedResult && (
-                  <span className="block text-good mt-1">
-                    Added: {Object.entries(seedResult.counts).map(([k, v]) => `${v} ${k}`).join(', ')}.
-                  </span>
-                )}
+                Fills every module with about a year of realistic sample data — customers, deals,
+                quotations, proforma invoices, invoices with part payments, tickets and activity
+                history — so reports and dashboards have something real to show.
+                {' '}Records you entered yourself are never touched.
               </p>
+
+              {demoStatus?.loaded && !seedResult && (
+                <p className="text-xs text-slate-500 mt-2">
+                  <span className="font-medium text-ink">Currently loaded:</span>{' '}
+                  {DEMO_ORDER.filter((k) => demoStatus.counts[k])
+                    .map((k) => `${demoStatus.counts[k]} ${demoLabel(k)}`)
+                    .join(' · ')}
+                </p>
+              )}
+
+              {seedResult && (
+                <p className="text-xs text-good mt-2">
+                  {seedResult.message}
+                  {seedResult.counts && Object.keys(seedResult.counts).length > 0 && (
+                    <span className="block text-slate-500 mt-1">
+                      {DEMO_ORDER.filter((k) => seedResult.counts[k])
+                        .map((k) => `${seedResult.counts[k]} ${demoLabel(k)}`)
+                        .join(' · ')}
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
           </div>
-          <button onClick={seedDemoData} disabled={seeding}
-            className="bg-ink text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-ink-light disabled:opacity-60 shrink-0">
-            {seeding ? 'Loading…' : 'Load Demo Data'}
-          </button>
+          <div className="flex flex-col gap-2 shrink-0">
+            <button onClick={seedDemoData} disabled={seeding || wiping}
+              className="bg-ink text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-ink-light disabled:opacity-60">
+              {seeding ? 'Loading…' : demoStatus?.loaded ? 'Reload Demo Data' : 'Load Demo Data'}
+            </button>
+            {demoStatus?.loaded && (
+              <button onClick={wipeDemoData} disabled={seeding || wiping}
+                className="text-sm font-medium px-4 py-2 rounded-lg border border-line text-slate-600 hover:text-warn disabled:opacity-60">
+                {wiping ? 'Removing…' : 'Remove Demo Data'}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
