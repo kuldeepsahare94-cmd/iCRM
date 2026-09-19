@@ -141,6 +141,128 @@ body {
 .thin-scroll::-webkit-scrollbar-track { background: transparent; }
 .thin-scroll::-webkit-scrollbar-thumb { background: var(--color-line-strong); border-radius: 4px; }
 
+/* ============================================================
+   Dashboard "premium" effects.
+   ============================================================
+   Scoped to the Dashboard only — these are deliberately not folded into
+   `.card`, because the brief was to lift the one screen everyone sees
+   first without changing how the rest of the app behaves.
+
+   Three ideas run through all of it:
+     1. Depth — a real shadow, not a hairline, so a card sits ABOVE the
+        canvas rather than being a rectangle drawn on it.
+     2. Glow — each section's own accent colour leaks a few soft pixels
+        outside its edge, which is what makes a panel feel "lit" instead
+        of flat, without tipping into neon.
+     3. Motion — a brief, staggered rise-and-fade on load, and a lift on
+        hover. Both are short (200–450ms) and both are cut entirely under
+        prefers-reduced-motion, because "premium" and "distracting" are
+        decided by duration, not by whether motion exists at all.
+   ============================================================ */
+
+.dash-card {
+  position: relative;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px rgba(16, 20, 35, 0.04), 0 12px 28px -14px rgba(30, 27, 75, 0.14);
+  transition: transform .25s cubic-bezier(.16,1,.3,1), box-shadow .25s cubic-bezier(.16,1,.3,1), border-color .25s ease;
+}
+.dash-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--color-line-strong);
+  box-shadow: 0 1px 2px rgba(16, 20, 35, 0.04), 0 24px 40px -16px rgba(30, 27, 75, 0.22);
+}
+
+/* A soft, colour-matched halo sitting just behind a card — the "glow".
+   Pass the tint via --glow-color (an rgba string). Kept as its own
+   absolutely-positioned pseudo-element rather than a box-shadow so it can
+   blur wider than a shadow would without looking like the card itself is
+   fuzzy at the edges. */
+.dash-glow { position: relative; }
+.dash-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(140deg, var(--glow-color, rgba(99,102,241,.35)), transparent 55%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity .3s ease;
+  pointer-events: none;
+}
+.dash-glow:hover::before { opacity: 1; }
+.dash-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 0 var(--glow-color, transparent);
+  transition: box-shadow .35s ease;
+  pointer-events: none;
+}
+.dash-glow:hover::after { box-shadow: 0 8px 40px -6px var(--glow-color, transparent); }
+
+/* Icon chips: a soft ambient ring behind the gradient square, so the icon
+   reads as a light source rather than a flat coloured tile. */
+.dash-icon-chip { position: relative; }
+.dash-icon-chip::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  background: inherit;
+  filter: blur(10px);
+  opacity: .45;
+  z-index: -1;
+}
+
+/* Entrance: a short rise-and-fade, staggered per element via
+   --stagger (index * delay, set inline). Runs once on mount. */
+@keyframes dash-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.dash-enter {
+  animation: dash-rise .5s cubic-bezier(.16,1,.3,1) both;
+  animation-delay: var(--stagger, 0ms);
+}
+
+/* Numeral emphasis for the big KPI figure — a very subtle gradient text
+   fill reads as more considered than flat ink, at a size where it's a
+   texture rather than a legibility risk. */
+.dash-figure {
+  background: linear-gradient(180deg, var(--color-ink) 0%, var(--color-ink-light) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Animated progress fill for the source bars — width transitions in on
+   mount instead of appearing pre-filled, and carries a faint glow in its
+   own colour. */
+.dash-bar-fill {
+  transition: width .8s cubic-bezier(.16,1,.3,1);
+  box-shadow: 0 0 10px 0 var(--bar-glow, transparent);
+}
+
+/* Slow ambient drift for the two light blooms inside the "Keep the
+   Momentum" panel — small, looping, and slow enough (9–11s) to read as
+   ambient rather than as something demanding attention. */
+@keyframes dash-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-14px, 10px) scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-card, .dash-glow::before, .dash-glow::after, .dash-bar-fill { transition: none; }
+  .dash-enter { animation: none; }
+  [class*="animate-[dash-drift"] { animation: none; }
+}
+
 /* ===== Dark mode =====
    Applied via .dark-mode on <html>, toggled from Appearance settings. */
 html.dark-mode {
