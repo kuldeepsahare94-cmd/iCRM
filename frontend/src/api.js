@@ -344,6 +344,12 @@ export const api = {
   makeTemplateDefault: (id) => req('POST', `/document-templates/${id}/default`, {}),
   restoreTemplateVersion: (id, version) => req('POST', `/document-templates/${id}/restore/${version}`, {}),
   templateCatalog: () => req('GET', '/document-templates/catalog'),
+  // The ready-made library: every template plus its config (the browser draws
+  // the thumbnails from those), facets, recents and recommendations, in one
+  // request rather than one per card.
+  templateLibrary: (params) => req('GET', '/document-templates/library' + qs(params)),
+  favoriteTemplate: (id) => req('POST', `/document-templates/${id}/favorite`, {}),
+  useTemplate: (id, body) => req('POST', `/document-templates/${id}/use`, body || {}),
   templatePreviewBlob: async (body) => {
     const token = localStorage.getItem('cd_token');
     const res = await fetch(`${BASE}/document-templates/preview`, {

@@ -445,6 +445,29 @@ export default function Settings() {
         </Link>
       )}
 
+      {/* The library comes FIRST, and the builder is reached from inside it.
+          A customer's first contact with document design should be 75
+          finished layouts, not an empty block editor. */}
+      {can('document_templates', 'view') && (
+        <Link to="/settings/template-library"
+          className="card p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: 'var(--color-brand-soft)', color: 'var(--color-brand)' }}>
+              <LayoutTemplate className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-ink">Template Library</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                75 ready-made quotation, proforma and invoice designs across 18 industries.
+                Pick one, add your logo and colours, done.
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-amber shrink-0">Browse →</span>
+        </Link>
+      )}
+
       {can('document_templates', 'view') && (
         <Link to="/settings/templates"
           className="card p-5 mt-4 flex items-center justify-between flex-wrap gap-3 hover:border-amber transition-colors">
@@ -453,9 +476,9 @@ export default function Settings() {
               <LayoutTemplate className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-ink">Document Templates</h2>
+              <h2 className="text-sm font-semibold text-ink">Template Builder</h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Design how quotations, proformas and invoices look. No code, with a live preview.
+                My Templates, and the block-by-block builder for a completely custom design.
               </p>
             </div>
           </div>

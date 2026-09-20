@@ -35,6 +35,7 @@ const SettingsData = lazy(() => import('./pages/SettingsData'));
 const SettingsFinance = lazy(() => import('./pages/SettingsFinance'));
 const SettingsCompany = lazy(() => import('./pages/SettingsCompany'));
 const SettingsTemplates = lazy(() => import('./pages/SettingsTemplates'));
+const SettingsTemplateLibrary = lazy(() => import('./pages/SettingsTemplateLibrary'));
 const CallReports = lazy(() => import('./pages/CallReports'));
 const Customer360 = lazy(() => import('./pages/Customer360'));
 const SettingsEmail = lazy(() => import('./pages/SettingsEmail'));
@@ -92,6 +93,7 @@ export default function App() {
               <Route path="/settings/finance" element={<SettingsFinance />} />
               <Route path="/settings/company" element={<SettingsCompany />} />
               <Route path="/settings/templates" element={<SettingsTemplates />} />
+              <Route path="/settings/template-library" element={<SettingsTemplateLibrary />} />
               <Route path="/settings/email" element={<SettingsEmail />} />
               <Route path="/inbox" element={<Inbox />} />
               <Route path="/email-campaigns" element={<EmailCampaigns />} />
