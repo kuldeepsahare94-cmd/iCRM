@@ -7,6 +7,7 @@ const { requirePermission } = require('../middleware/auth');
 const templates = require('../services/documentTemplates');
 const { buildDocumentPdf } = require('../services/documentPdf');
 const docs = require('../services/documentService');
+const library = require('../services/templateLibrary');
 
 function handle(res, fn, status = 200) {
   try {
@@ -31,6 +32,47 @@ router.get('/catalog', requirePermission('document_templates', 'view'), (req, re
       .map(([key, def]) => ({ key, label: def.label })),
     starters: templates.BUILT_IN.map((t) => ({ name: t.name, doc_type: t.doc_type, config: t.config })),
   });
+});
+
+// ---------------------------------------------------------------------------
+// The ready-made library.
+// ---------------------------------------------------------------------------
+// Everything the library screen needs in one response. 78 templates with
+// their configs is roughly 200KB, which is one request rather than 78 — and
+// the configs are what the browser draws the thumbnails from, so there is no
+// second round trip per card either.
+router.get('/library', requirePermission('document_templates', 'view'), (req, res) => {
+  handle(res, () => {
+    const userId = req.user && req.user.id;
+    return {
+      templates: library.library({
+        docType: req.query.doc_type,
+        industry: req.query.industry,
+        style: req.query.style,
+        search: req.query.q,
+        favoritesOnly: req.query.favorites === '1',
+        scope: req.query.scope,
+      }, userId),
+      facets: library.facets(),
+      recent: library.recentlyUsed(userId),
+      recommended: library.recommended(userId),
+    };
+  });
+});
+
+// §26 — per user, so two colleagues keep different shortlists.
+router.post('/:id/favorite', requirePermission('document_templates', 'view'), (req, res) => {
+  handle(res, () => library.toggleFavorite(Number(req.params.id), req.user && req.user.id));
+});
+
+// §9 — "Use this template". On a system template this creates the
+// customer-owned copy; the master is never touched.
+router.post('/:id/use', requirePermission('document_templates', 'create'), (req, res) => {
+  handle(res, () => library.useTemplate(Number(req.params.id), {
+    name: req.body && req.body.name,
+    accountId: req.body && req.body.account_id,
+    makeDefault: req.body && req.body.make_default,
+  }, req.user && req.user.id), 201);
 });
 
 router.get('/', requirePermission('document_templates', 'view'), (req, res) => {

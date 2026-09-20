@@ -254,6 +254,46 @@ function twoDigits(n) {
 // The renderer
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Design axes
+// ---------------------------------------------------------------------------
+// A template used to be able to vary five colours and nothing else: every
+// font call in this file said "Helvetica" and every block had exactly one
+// layout. That is enough for three templates and nowhere near enough for a
+// library — twenty-five configs on that engine are twenty-five copies of one
+// design in different colours.
+//
+// These axes are what make two templates genuinely different documents.
+// Each is opt-in: a config that sets none of them renders exactly as it did
+// before, which is what keeps existing customer templates safe.
+
+// The 14 PDF base fonts are built into every PDF reader, so these need no
+// font files shipped, embedded or downloaded — nothing to go missing on a
+// deployment.
+const FONT_SETS = {
+  sans:  { regular: 'Helvetica', bold: 'Helvetica-Bold', italic: 'Helvetica-Oblique' },
+  serif: { regular: 'Times-Roman', bold: 'Times-Bold', italic: 'Times-Italic' },
+  mono:  { regular: 'Courier', bold: 'Courier-Bold', italic: 'Courier-Oblique' },
+};
+
+// Density multiplies every type size and the gaps between blocks. "compact"
+// is what lets a product-heavy template fit 30 line items on a page without
+// reducing anything to illegibility.
+const DENSITIES = { compact: 0.92, normal: 1, relaxed: 1.08 };
+
+// Readable text on top of a filled accent. A pale accent with white text on
+// it is unreadable, so this picks black or white by luminance rather than
+// trusting the template author to have thought about it.
+function contrastOn(hex) {
+  const h = String(hex || '#000000').replace('#', '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const n = parseInt(full, 16);
+  if (Number.isNaN(n)) return '#FFFFFF';
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  // Rec. 709 relative luminance.
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 150 ? '#111827' : '#FFFFFF';
+}
+
 const COLUMN_DEFS = {
   description: { label: 'Item / Description', width: 0, align: 'left' },   // 0 = take the remaining space
   hsn_sac: { label: 'HSN/SAC', width: 52, align: 'left' },
@@ -287,8 +327,17 @@ function buildDocumentPdf({ docType, record, templateId, template: override, use
   const right = doc.page.width - margin;
   const width = right - left;
 
+  const fonts = FONT_SETS[theme.font] || FONT_SETS.sans;
+  const scale = DENSITIES[theme.density] || 1;
+
   const painter = {
     doc, theme, left, right, width, margin, context, config,
+    f: fonts,
+    // Every type size in this file goes through fs(), so density is one
+    // number rather than 31 hand-tuned values.
+    fs: (n) => Math.round(n * scale * 10) / 10,
+    gap: (n) => n * scale,
+    onAccent: theme.accent_text || contrastOn(theme.accent),
     money: (n) => moneyText(n, context.doc.currency),
     text: (t) => merge(t, context),
   };
@@ -323,49 +372,227 @@ function ensureRoom(painter, needed) {
   if (doc.y + needed > doc.page.height - doc.page.margins.bottom - 24) doc.addPage();
 }
 
-const BLOCK_RENDERERS = {
-  company_header(p, block) {
+// Shared pieces of a letterhead, so the five variants differ in composition
+// rather than each re-implementing "print the address".
+function companyLines(p) {
+  const c = p.context.company;
+  return {
+    address: [c.address, [c.city, c.state, c.postal_code].filter(Boolean).join(', ')].filter(Boolean).map(String),
+    ids: [c.gstin && `GSTIN: ${c.gstin}`, c.pan && `PAN: ${c.pan}`].filter(Boolean).join('   '),
+    contact: [c.phone, c.email, c.website].filter(Boolean).join('   '),
+  };
+}
+
+function drawLogo(p, x, y, box) {
+  const url = p.context.company.logo_url;
+  if (!url) return false;
+  const image = loadImage(url);
+  if (!image) return false;
+  try {
+    p.doc.image(image, x, y, { fit: box });
+    return true;
+  } catch {
+    // An unreadable logo is not a reason to fail the invoice.
+    return false;
+  }
+}
+
+const HEADER_VARIANTS = {
+  // Logo left, company details beside it, accent rule underneath.
+  classic(p, block) {
     const { doc, theme, context, left, width } = p;
     const company = context.company;
     const startY = doc.y;
     let textLeft = left;
 
-    if (block.show_logo !== false && company.logo_url) {
-      const image = loadImage(company.logo_url);
-      if (image) {
-        try {
-          doc.image(image, left, startY, { fit: [110, 46] });
-          textLeft = left + 124;
-        } catch { /* an unreadable logo is not a reason to fail the invoice */ }
-      }
-    }
+    if (block.show_logo !== false && drawLogo(p, left, startY, [110, 46])) textLeft = left + 124;
 
-    doc.font('Helvetica-Bold').fontSize(16).fillColor(theme.text)
-      .text(company.legal_name || '', textLeft, startY, { width: width - (textLeft - left) });
-    doc.font('Helvetica').fontSize(8.5).fillColor(theme.muted);
-    [company.address, [company.city, company.state, company.postal_code].filter(Boolean).join(', ')]
-      .filter(Boolean)
-      .forEach((line) => doc.text(String(line), textLeft, doc.y, { width: width - (textLeft - left) }));
-
-    const idLine = [
-      company.gstin && `GSTIN: ${company.gstin}`,
-      company.pan && `PAN: ${company.pan}`,
-    ].filter(Boolean).join('   ');
-    if (idLine) doc.text(idLine, textLeft, doc.y, { width: width - (textLeft - left) });
-
-    const contactLine = [company.phone, company.email, company.website].filter(Boolean).join('   ');
-    if (contactLine) doc.text(contactLine, textLeft, doc.y, { width: width - (textLeft - left) });
+    const w = width - (textLeft - left);
+    doc.font(p.f.bold).fontSize(p.fs(16)).fillColor(theme.text)
+      .text(company.legal_name || '', textLeft, startY, { width: w });
+    doc.font(p.f.regular).fontSize(p.fs(8.5)).fillColor(theme.muted);
+    const lines = companyLines(p);
+    lines.address.forEach((line) => doc.text(line, textLeft, doc.y, { width: w }));
+    if (lines.ids) doc.text(lines.ids, textLeft, doc.y, { width: w });
+    if (lines.contact) doc.text(lines.contact, textLeft, doc.y, { width: w });
 
     doc.moveDown(0.6);
     rule(p, theme.accent, 1.6);
     doc.moveDown(0.6);
   },
 
+  // Everything stacked and centred, with a hairline rule. Reads formal —
+  // suits professional services, legal, healthcare.
+  centered(p, block) {
+    const { doc, theme, context, left, width } = p;
+    const company = context.company;
+    let y = doc.y;
+
+    if (block.show_logo !== false && p.context.company.logo_url) {
+      const logoW = 96;
+      if (drawLogo(p, left + (width - logoW) / 2, y, [logoW, 42])) y += 50;
+    }
+
+    doc.font(p.f.bold).fontSize(p.fs(17)).fillColor(theme.text)
+      .text(company.legal_name || '', left, y, { width, align: 'center' });
+    doc.font(p.f.regular).fontSize(p.fs(8.5)).fillColor(theme.muted);
+    const lines = companyLines(p);
+    lines.address.forEach((line) => doc.text(line, left, doc.y + 1, { width, align: 'center' }));
+    if (lines.contact) doc.text(lines.contact, left, doc.y + 1, { width, align: 'center' });
+    if (lines.ids) doc.text(lines.ids, left, doc.y + 1, { width, align: 'center' });
+
+    doc.moveDown(0.7);
+    rule(p, theme.line, 0.8);
+    doc.moveDown(0.7);
+  },
+
+  // A full-bleed accent band across the top of the page with the company
+  // reversed out of it. The most assertive of the five.
+  band(p, block) {
+    const { doc, theme, context, left, width, margin } = p;
+    const company = context.company;
+    const bandH = p.gap(74);
+    const top = doc.y;
+
+    // Drawn edge to edge rather than inside the margin, which is what makes
+    // it read as a masthead instead of a coloured box.
+    doc.rect(0, top - margin, doc.page.width, bandH + margin).fill(theme.accent);
+
+    const ink = p.onAccent;
+    let textLeft = left;
+    if (block.show_logo !== false && drawLogo(p, left, top + 4, [92, 38])) textLeft = left + 104;
+
+    doc.font(p.f.bold).fontSize(p.fs(15)).fillColor(ink)
+      .text(company.legal_name || '', textLeft, top + 4, { width: width - (textLeft - left) - 150 });
+
+    const lines = companyLines(p);
+    doc.font(p.f.regular).fontSize(p.fs(8)).fillColor(ink).opacity(0.85);
+    lines.address.forEach((line) => doc.text(line, textLeft, doc.y + 1, { width: width - (textLeft - left) - 150 }));
+    if (lines.contact) doc.text(lines.contact, textLeft, doc.y + 1, { width: width - (textLeft - left) - 150 });
+    doc.opacity(1);
+
+    doc.y = top + bandH - p.gap(8);
+    doc.x = left;
+    doc.moveDown(0.6);
+  },
+
+  // A vertical accent rule down the left with the details set against it.
+  // Quiet but distinctly designed — suits consulting and finance.
+  sidebar(p, block) {
+    const { doc, theme, context, left, width } = p;
+    const company = context.company;
+    const top = doc.y;
+    const barW = 4;
+    const textLeft = left + barW + 12;
+    const w = width - (textLeft - left);
+
+    let y = top;
+    if (block.show_logo !== false && drawLogo(p, textLeft, y, [100, 40])) y += 48;
+
+    doc.font(p.f.bold).fontSize(p.fs(15)).fillColor(theme.text)
+      .text(company.legal_name || '', textLeft, y, { width: w });
+    doc.font(p.f.regular).fontSize(p.fs(8.5)).fillColor(theme.muted);
+    const lines = companyLines(p);
+    lines.address.forEach((line) => doc.text(line, textLeft, doc.y, { width: w }));
+    if (lines.ids) doc.text(lines.ids, textLeft, doc.y, { width: w });
+    if (lines.contact) doc.text(lines.contact, textLeft, doc.y, { width: w });
+
+    // Drawn last, once the text height is known, so the rule always matches
+    // the block it belongs to rather than a guessed height.
+    doc.rect(left, top, barW, Math.max(p.gap(40), doc.y - top)).fill(theme.accent);
+    doc.y = Math.max(doc.y, top + p.gap(40));
+    doc.x = left;
+    doc.moveDown(0.8);
+  },
+
+  // Company name on the left, contact details right-aligned opposite it, no
+  // rule at all. The most restrained — suits minimal and elegant styles.
+  minimal(p, block) {
+    const { doc, theme, context, left, width } = p;
+    const company = context.company;
+    const top = doc.y;
+    const colW = (width / 2) - 10;
+
+    let nameTop = top;
+    if (block.show_logo !== false && drawLogo(p, left, top, [86, 34])) nameTop = top + 42;
+
+    doc.font(p.f.bold).fontSize(p.fs(14)).fillColor(theme.text)
+      .text(company.legal_name || '', left, nameTop, { width: colW });
+    const leftBottom = doc.y;
+
+    const lines = companyLines(p);
+    doc.font(p.f.regular).fontSize(p.fs(8)).fillColor(theme.muted);
+    doc.y = top;
+    [...lines.address, lines.contact, lines.ids].filter(Boolean)
+      .forEach((line) => doc.text(line, left + width - colW, doc.y, { width: colW, align: 'right' }));
+
+    doc.y = Math.max(leftBottom, doc.y) + p.gap(10);
+    doc.x = left;
+  },
+};
+
+const BLOCK_RENDERERS = {
+  // Five genuinely different letterheads, not one letterhead in five
+  // colours. `variant` is omitted by every pre-existing template, and
+  // "classic" is byte-for-byte what this block has always drawn.
+  company_header(p, block) {
+    const variant = block.variant || 'classic';
+    const draw = HEADER_VARIANTS[variant] || HEADER_VARIANTS.classic;
+    draw(p, block);
+  },
+
   title(p, block) {
-    const { doc, theme, config } = p;
-    const title = p.text(block.text || config.labels?.title || 'DOCUMENT');
-    doc.font('Helvetica-Bold').fontSize(15).fillColor(theme.accent)
-      .text(title.toUpperCase(), p.left, doc.y, { width: p.width, align: block.align || 'center' });
+    const { doc, theme, config, left, width } = p;
+    const raw = p.text(block.text || config.labels?.title || 'DOCUMENT');
+    const title = raw.toUpperCase();
+    const align = block.align || 'center';
+    const variant = block.variant || 'plain';
+
+    if (variant === 'band') {
+      // Reversed out of a full-width accent bar.
+      const h = p.gap(26);
+      const y = doc.y;
+      doc.rect(left, y, width, h).fill(theme.accent);
+      doc.font(p.f.bold).fontSize(p.fs(13)).fillColor(p.onAccent)
+        .text(title, left + 10, y + h / 2 - p.fs(13) * 0.62, { width: width - 20, align });
+      doc.y = y + h;
+      doc.moveDown(0.6);
+      return;
+    }
+
+    if (variant === 'boxed') {
+      // Outlined, sized to the text rather than the page — reads as a stamp.
+      doc.font(p.f.bold).fontSize(p.fs(13));
+      const textW = doc.widthOfString(title) + 28;
+      const h = p.gap(24);
+      const x = align === 'right' ? left + width - textW : align === 'left' ? left : left + (width - textW) / 2;
+      const y = doc.y;
+      doc.lineWidth(1).strokeColor(theme.accent).rect(x, y, textW, h).stroke();
+      doc.fillColor(theme.accent).text(title, x, y + h / 2 - p.fs(13) * 0.62, { width: textW, align: 'center' });
+      doc.y = y + h;
+      doc.moveDown(0.6);
+      return;
+    }
+
+    if (variant === 'underline') {
+      doc.font(p.f.bold).fontSize(p.fs(15)).fillColor(theme.text)
+        .text(title, left, doc.y, { width, align });
+      doc.moveDown(0.2);
+      rule(p, theme.accent, 2);
+      doc.moveDown(0.5);
+      return;
+    }
+
+    if (variant === 'spaced') {
+      // Wide letter-spacing, small caps feel — the "elegant" treatment.
+      doc.font(p.f.bold).fontSize(p.fs(12)).fillColor(theme.accent)
+        .text(title, left, doc.y, { width, align, characterSpacing: 3 });
+      doc.moveDown(0.6);
+      return;
+    }
+
+    doc.font(p.f.bold).fontSize(p.fs(15)).fillColor(theme.accent)
+      .text(title, left, doc.y, { width, align });
     doc.moveDown(0.5);
   },
 
@@ -387,14 +614,14 @@ const BLOCK_RENDERERS = {
     const rows = Math.ceil(pairs.length / columns);
     const top = doc.y;
 
-    doc.fontSize(8.5);
+    doc.fontSize(p.fs(8.5));
     pairs.forEach((pair, i) => {
       const col = i % columns;
       const row = Math.floor(i / columns);
       const x = left + (col * cellWidth);
       const y = top + (row * 26);
-      doc.font('Helvetica').fillColor(theme.muted).text(pair[0], x, y, { width: cellWidth - 8 });
-      doc.font('Helvetica-Bold').fillColor(theme.text).text(String(pair[1] ?? ''), x, y + 11, { width: cellWidth - 8 });
+      doc.font(p.f.regular).fillColor(theme.muted).text(pair[0], x, y, { width: cellWidth - 8 });
+      doc.font(p.f.bold).fillColor(theme.text).text(String(pair[1] ?? ''), x, y + 11, { width: cellWidth - 8 });
     });
 
     doc.y = top + (rows * 26) + 4;
@@ -408,9 +635,9 @@ const BLOCK_RENDERERS = {
     const top = doc.y;
 
     const panel = (x, w, heading, lines) => {
-      doc.font('Helvetica-Bold').fontSize(8).fillColor(theme.muted).text(heading.toUpperCase(), x, top, { width: w });
-      doc.font('Helvetica-Bold').fontSize(10.5).fillColor(theme.text).text(lines[0] || '—', x, doc.y + 2, { width: w });
-      doc.font('Helvetica').fontSize(9).fillColor(theme.text);
+      doc.font(p.f.bold).fontSize(p.fs(8)).fillColor(theme.muted).text(heading.toUpperCase(), x, top, { width: w });
+      doc.font(p.f.bold).fontSize(p.fs(10.5)).fillColor(theme.text).text(lines[0] || '—', x, doc.y + 2, { width: w });
+      doc.font(p.f.regular).fontSize(p.fs(9)).fillColor(theme.text);
       lines.slice(1).filter(Boolean).forEach((line) => doc.text(String(line), x, doc.y, { width: w }));
       return doc.y;
     };
@@ -446,20 +673,48 @@ const BLOCK_RENDERERS = {
     const flexWidth = flexible.length ? Math.max(90, (width - fixed) / flexible.length) : 0;
     const widthOf = (k) => (COLUMN_DEFS[k].width || flexWidth);
 
+    // How the table is drawn — the second-biggest driver of how different
+    // two templates look, after the letterhead.
+    //   solid    filled accent header, zebra body   (the original)
+    //   outlined ruled box, tinted header
+    //   zebra    no header fill, strong zebra body
+    //   minimal  a single rule under the header, nothing else
+    //   boxed    every cell gridded — suits engineering / spec tables
+    const style = block.variant || 'solid';
+    const headH = p.gap(20);
+
     const drawHeader = () => {
       const y = doc.y;
-      doc.rect(left, y, width, 20).fill(theme.accent);
-      doc.font('Helvetica-Bold').fontSize(8).fillColor('#FFFFFF');
+      let headInk = theme.text;
+
+      if (style === 'solid') {
+        doc.rect(left, y, width, headH).fill(theme.accent);
+        headInk = p.onAccent;
+      } else if (style === 'outlined' || style === 'boxed') {
+        doc.rect(left, y, width, headH).fill(theme.panel);
+        doc.lineWidth(0.7).strokeColor(theme.line).rect(left, y, width, headH).stroke();
+        headInk = theme.text;
+      } else if (style === 'zebra') {
+        doc.rect(left, y, width, headH).fill(theme.panel);
+        headInk = theme.text;
+      }
+
+      doc.font(p.f.bold).fontSize(p.fs(8)).fillColor(headInk);
       let x = left + 6;
       keys.forEach((k) => {
-        const w = widthOf(k) - 8;
-        doc.text(COLUMN_DEFS[k].label, x, y + 6.5, { width: w, align: COLUMN_DEFS[k].align });
+        doc.text(COLUMN_DEFS[k].label, x, y + p.gap(6.5), { width: widthOf(k) - 8, align: COLUMN_DEFS[k].align });
         x += widthOf(k);
       });
-      doc.y = y + 20;
+
+      if (style === 'minimal') {
+        doc.strokeColor(theme.accent).lineWidth(1)
+          .moveTo(left, y + headH).lineTo(left + width, y + headH).stroke();
+      }
+      doc.y = y + headH;
       doc.x = left;
     };
 
+    const bodyTop = doc.y;
     drawHeader();
 
     const currency = context.doc.currency;
@@ -467,9 +722,9 @@ const BLOCK_RENDERERS = {
       const cells = keys.map((k) => cellText(k, item, currency));
       // Measure first: a long description wraps, and the row's background and
       // its neighbours all have to agree on how tall that made it.
-      doc.font('Helvetica').fontSize(8.5);
-      const rowHeight = Math.max(18, ...keys.map((k, i) => (
-        doc.heightOfString(cells[i], { width: widthOf(k) - 8 }) + 9
+      doc.font(p.f.regular).fontSize(p.fs(8.5));
+      const rowHeight = Math.max(p.gap(18), ...keys.map((k, i) => (
+        doc.heightOfString(cells[i], { width: widthOf(k) - 8 }) + p.gap(9)
       )));
 
       if (doc.y + rowHeight > doc.page.height - doc.page.margins.bottom - 90) {
@@ -478,32 +733,54 @@ const BLOCK_RENDERERS = {
       }
 
       const y = doc.y;
-      if (index % 2 === 1) doc.rect(left, y, width, rowHeight).fill(theme.panel);
-      doc.font('Helvetica').fontSize(8.5).fillColor(theme.text);
+      const striped = (style === 'solid' || style === 'zebra') && index % 2 === 1;
+      if (striped) doc.rect(left, y, width, rowHeight).fill(theme.panel);
+
+      doc.font(p.f.regular).fontSize(p.fs(8.5)).fillColor(theme.text);
       let x = left + 6;
       keys.forEach((k, i) => {
-        doc.text(cells[i], x, y + 5, { width: widthOf(k) - 8, align: COLUMN_DEFS[k].align });
+        doc.text(cells[i], x, y + p.gap(5), { width: widthOf(k) - 8, align: COLUMN_DEFS[k].align });
         x += widthOf(k);
       });
-      doc.strokeColor(theme.line).lineWidth(0.5)
-        .moveTo(left, y + rowHeight).lineTo(left + width, y + rowHeight).stroke();
+
+      // Row separators. "zebra" carries the banding instead, and "boxed"
+      // draws its own full grid below.
+      if (style !== 'zebra' && style !== 'boxed') {
+        doc.strokeColor(theme.line).lineWidth(0.5)
+          .moveTo(left, y + rowHeight).lineTo(left + width, y + rowHeight).stroke();
+      }
+      if (style === 'boxed') {
+        doc.strokeColor(theme.line).lineWidth(0.5).rect(left, y, width, rowHeight).stroke();
+        let cx = left;
+        keys.slice(0, -1).forEach((k) => {
+          cx += widthOf(k);
+          doc.moveTo(cx, y).lineTo(cx, y + rowHeight).stroke();
+        });
+      }
       doc.y = y + rowHeight;
       doc.x = left;
     });
 
+    // Outlined wraps the whole table once, at the end, so it survives a
+    // page break without drawing a box around empty space.
+    if (style === 'outlined' && doc.y > bodyTop) {
+      doc.strokeColor(theme.line).lineWidth(0.7).rect(left, bodyTop, width, doc.y - bodyTop).stroke();
+    }
+
     if (!context.items.length) {
-      doc.font('Helvetica-Oblique').fontSize(9).fillColor(theme.muted)
+      doc.font(p.f.italic).fontSize(p.fs(9)).fillColor(theme.muted)
         .text('No items on this document.', left, doc.y + 8, { width });
       doc.y += 14;
     }
     doc.moveDown(0.5);
   },
 
-  totals(p) {
+  totals(p, block = {}) {
     const { doc, theme, context, left, width } = p;
     const d = context.doc;
-    const boxWidth = 240;
+    const boxWidth = Number(block.width) || 240;
     const x = left + width - boxWidth;
+    const style = block.variant || 'band';
 
     const rows = [
       ['Subtotal', p.money(d.subtotal)],
@@ -516,22 +793,50 @@ const BLOCK_RENDERERS = {
       d.round_off ? ['Round Off', p.money(d.round_off)] : null,
     ].filter(Boolean);
 
-    ensureRoom(p, (rows.length * 15) + 52);
+    const lineH = p.gap(15);
+    const grandH = p.gap(24);
+    ensureRoom(p, (rows.length * lineH) + grandH + p.gap(28));
     const top = doc.y;
-    doc.fontSize(9);
+
+    // "panel" tints the whole stack before anything is written on it.
+    if (style === 'panel') {
+      doc.rect(x, top - p.gap(6), boxWidth, (rows.length * lineH) + grandH + p.gap(14)).fill(theme.panel);
+    }
+
+    doc.fontSize(p.fs(9));
     rows.forEach((row, i) => {
-      const y = top + (i * 15);
-      doc.font('Helvetica').fillColor(theme.muted).text(row[0], x, y, { width: boxWidth - 110 });
-      doc.font('Helvetica').fillColor(theme.text).text(row[1], x + boxWidth - 110, y, { width: 110, align: 'right' });
+      const y = top + (i * lineH);
+      doc.font(p.f.regular).fillColor(theme.muted).text(row[0], x + (style === 'panel' ? 8 : 0), y, { width: boxWidth - 110 });
+      doc.font(p.f.regular).fillColor(theme.text)
+        .text(row[1], x + boxWidth - 110 - (style === 'panel' ? 8 : 0), y, { width: 110, align: 'right' });
     });
 
-    const grandY = top + (rows.length * 15) + 4;
-    doc.rect(x, grandY, boxWidth, 24).fill(theme.accent);
-    doc.font('Helvetica-Bold').fontSize(10).fillColor('#FFFFFF')
-      .text('Grand Total', x + 8, grandY + 7, { width: boxWidth - 120 })
-      .text(p.money(d.grand_total), x + boxWidth - 118, grandY + 7, { width: 110, align: 'right' });
+    const grandY = top + (rows.length * lineH) + p.gap(4);
 
-    doc.y = grandY + 32;
+    if (style === 'plain') {
+      // No fill at all: two rules and bold type carry the emphasis. The
+      // quietest option, and the one that suits minimal templates.
+      doc.strokeColor(theme.text).lineWidth(0.8)
+        .moveTo(x, grandY).lineTo(x + boxWidth, grandY).stroke();
+      doc.font(p.f.bold).fontSize(p.fs(10.5)).fillColor(theme.text)
+        .text('Grand Total', x, grandY + p.gap(7), { width: boxWidth - 120 })
+        .text(p.money(d.grand_total), x + boxWidth - 118, grandY + p.gap(7), { width: 110, align: 'right' });
+      doc.strokeColor(theme.text).lineWidth(0.8)
+        .moveTo(x, grandY + grandH).lineTo(x + boxWidth, grandY + grandH).stroke();
+    } else if (style === 'outlined') {
+      doc.lineWidth(1.2).strokeColor(theme.accent).rect(x, grandY, boxWidth, grandH).stroke();
+      doc.font(p.f.bold).fontSize(p.fs(10)).fillColor(theme.accent)
+        .text('Grand Total', x + 8, grandY + p.gap(7), { width: boxWidth - 120 })
+        .text(p.money(d.grand_total), x + boxWidth - 118, grandY + p.gap(7), { width: 110, align: 'right' });
+    } else {
+      // "band" and "panel" both finish with the filled accent row.
+      doc.rect(x, grandY, boxWidth, grandH).fill(theme.accent);
+      doc.font(p.f.bold).fontSize(p.fs(10)).fillColor(p.onAccent)
+        .text('Grand Total', x + 8, grandY + p.gap(7), { width: boxWidth - 120 })
+        .text(p.money(d.grand_total), x + boxWidth - 118, grandY + p.gap(7), { width: 110, align: 'right' });
+    }
+
+    doc.y = grandY + grandH + p.gap(8);
     doc.x = left;
   },
 
@@ -544,19 +849,19 @@ const BLOCK_RENDERERS = {
       ? [['Rate', 50], ['Taxable Value', 110], ['IGST', 110]]
       : [['Rate', 50], ['Taxable Value', 110], ['CGST', 90], ['SGST', 90]];
 
-    doc.font('Helvetica-Bold').fontSize(8).fillColor(theme.muted).text('TAX BREAKDOWN', left, doc.y, { width });
+    doc.font(p.f.bold).fontSize(p.fs(8)).fillColor(theme.muted).text('TAX BREAKDOWN', left, doc.y, { width });
     doc.moveDown(0.3);
 
     const top = doc.y;
     let x = left;
-    doc.font('Helvetica-Bold').fontSize(8).fillColor(theme.text);
+    doc.font(p.f.bold).fontSize(p.fs(8)).fillColor(theme.text);
     columns.forEach(([label, w], i) => {
       doc.text(label, x, top, { width: w - 6, align: i === 0 ? 'left' : 'right' });
       x += w;
     });
     doc.strokeColor(theme.line).lineWidth(0.5).moveTo(left, top + 11).lineTo(left + x - left, top + 11).stroke();
 
-    doc.font('Helvetica').fontSize(8.5).fillColor(theme.text);
+    doc.font(p.f.regular).fontSize(p.fs(8.5)).fillColor(theme.text);
     summary.forEach((row, i) => {
       const y = top + 16 + (i * 13);
       const cells = interstate
@@ -576,8 +881,8 @@ const BLOCK_RENDERERS = {
 
   amount_in_words(p) {
     const { doc, theme, context, left, width } = p;
-    doc.font('Helvetica').fontSize(8.5).fillColor(theme.muted).text('Amount in words', left, doc.y, { width });
-    doc.font('Helvetica-Bold').fontSize(9.5).fillColor(theme.text)
+    doc.font(p.f.regular).fontSize(p.fs(8.5)).fillColor(theme.muted).text('Amount in words', left, doc.y, { width });
+    doc.font(p.f.bold).fontSize(p.fs(9.5)).fillColor(theme.text)
       .text(numberToWords(context.doc.grand_total), left, doc.y + 1, { width });
     doc.moveDown(0.7);
   },
@@ -592,13 +897,13 @@ const BLOCK_RENDERERS = {
     ensureRoom(p, height + 14);
     const y = doc.y;
     doc.rect(left, y, width, height).fillAndStroke(settled ? '#ECFDF5' : '#FFFBEB', settled ? '#A7F3D0' : '#FDE68A');
-    doc.font('Helvetica-Bold').fontSize(10).fillColor(colour)
+    doc.font(p.f.bold).fontSize(p.fs(10)).fillColor(colour)
       .text(settled ? 'PAID IN FULL' : `Balance due: ${p.money(d.balance_due)}`, left + 10, y + 7, { width: width - 20 });
     const line = [
       d.amount_paid ? `Received ${p.money(d.amount_paid)} of ${p.money(d.grand_total)}` : null,
       d.due_date ? `Due ${dateText(d.due_date)}` : null,
     ].filter(Boolean).join('   ·   ');
-    if (line) doc.font('Helvetica').fontSize(8).fillColor(theme.muted).text(line, left + 10, y + 21, { width: width - 20 });
+    if (line) doc.font(p.f.regular).fontSize(p.fs(8)).fillColor(theme.muted).text(line, left + 10, y + 21, { width: width - 20 });
     doc.y = y + height + 10;
     doc.x = left;
   },
@@ -616,17 +921,17 @@ const BLOCK_RENDERERS = {
     if (!rows.length) return;
 
     ensureRoom(p, (Math.ceil(rows.length / 2) * 13) + 30);
-    doc.font('Helvetica-Bold').fontSize(8).fillColor(theme.muted)
+    doc.font(p.f.bold).fontSize(p.fs(8)).fillColor(theme.muted)
       .text((block.label || 'Bank Details').toUpperCase(), left, doc.y, { width });
     doc.moveDown(0.3);
     const top = doc.y;
     const half = width / 2;
-    doc.fontSize(8.5);
+    doc.fontSize(p.fs(8.5));
     rows.forEach(([label, value], i) => {
       const x = left + ((i % 2) * half);
       const y = top + (Math.floor(i / 2) * 13);
-      doc.font('Helvetica').fillColor(theme.muted).text(`${label}:`, x, y, { width: 88 });
-      doc.font('Helvetica-Bold').fillColor(theme.text).text(String(value), x + 90, y, { width: half - 98 });
+      doc.font(p.f.regular).fillColor(theme.muted).text(`${label}:`, x, y, { width: 88 });
+      doc.font(p.f.bold).fillColor(theme.text).text(String(value), x + 90, y, { width: half - 98 });
     });
     doc.y = top + (Math.ceil(rows.length / 2) * 13) + 8;
     doc.x = left;
@@ -637,9 +942,9 @@ const BLOCK_RENDERERS = {
     const text = p.text(block.content || context.doc.terms || '');
     if (!text.trim()) return;
     ensureRoom(p, 40);
-    doc.font('Helvetica-Bold').fontSize(8).fillColor(theme.muted)
+    doc.font(p.f.bold).fontSize(p.fs(8)).fillColor(theme.muted)
       .text((block.label || 'Terms & Conditions').toUpperCase(), left, doc.y, { width });
-    doc.font('Helvetica').fontSize(8.5).fillColor(theme.text).text(text, left, doc.y + 2, { width });
+    doc.font(p.f.regular).fontSize(p.fs(8.5)).fillColor(theme.text).text(text, left, doc.y + 2, { width });
     doc.moveDown(0.7);
   },
 
@@ -647,9 +952,9 @@ const BLOCK_RENDERERS = {
     const { doc, theme, context, left, width } = p;
     const text = p.text(block.content || context.doc.notes || '');
     if (!text.trim()) return;
-    doc.font('Helvetica-Bold').fontSize(8).fillColor(theme.muted)
+    doc.font(p.f.bold).fontSize(p.fs(8)).fillColor(theme.muted)
       .text((block.label || 'Notes').toUpperCase(), left, doc.y, { width });
-    doc.font('Helvetica').fontSize(8.5).fillColor(theme.text).text(text, left, doc.y + 2, { width });
+    doc.font(p.f.regular).fontSize(p.fs(8.5)).fillColor(theme.text).text(text, left, doc.y + 2, { width });
     doc.moveDown(0.7);
   },
 
@@ -661,7 +966,7 @@ const BLOCK_RENDERERS = {
     const x = left + width - boxWidth;
     const top = doc.y + 6;
 
-    doc.font('Helvetica').fontSize(8).fillColor(theme.muted)
+    doc.font(p.f.regular).fontSize(p.fs(8)).fillColor(theme.muted)
       .text(`For ${c.legal_name || ''}`, x, top, { width: boxWidth, align: 'center' });
 
     let cursor = top + 14;
@@ -679,7 +984,7 @@ const BLOCK_RENDERERS = {
     }
 
     doc.strokeColor(theme.line).lineWidth(0.8).moveTo(x + 20, cursor).lineTo(x + boxWidth - 20, cursor).stroke();
-    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(theme.text)
+    doc.font(p.f.bold).fontSize(p.fs(8.5)).fillColor(theme.text)
       .text(block.label || c.signatory_name || 'Authorised Signatory', x, cursor + 4, { width: boxWidth, align: 'center' });
     doc.y = cursor + 20;
     doc.x = left;
@@ -706,7 +1011,7 @@ const BLOCK_RENDERERS = {
     matrix.forEach((row, r) => row.forEach((on, c2) => {
       if (on) doc.rect(left + (c2 * cell), top + (r * cell), cell + 0.2, cell + 0.2).fill('#000000');
     }));
-    doc.font('Helvetica').fontSize(7.5).fillColor(theme.muted)
+    doc.font(p.f.regular).fontSize(p.fs(7.5)).fillColor(theme.muted)
       .text(`Scan to pay · ${c.upi_id}`, left, top + size + 4, { width: 160 });
     doc.y = top + size + 18;
     doc.x = left;
@@ -716,7 +1021,7 @@ const BLOCK_RENDERERS = {
     const { doc, theme, left, width } = p;
     const content = p.text(block.content || '');
     if (!content.trim()) return;
-    doc.font(block.bold ? 'Helvetica-Bold' : 'Helvetica')
+    doc.font(block.bold ? p.f.bold : p.f.regular)
       .fontSize(Number(block.size) || 9)
       .fillColor(block.muted ? theme.muted : theme.text)
       .text(content, left, doc.y, { width, align: block.align || 'left' });
@@ -782,7 +1087,7 @@ function paintWatermark(p, preview) {
     const originalBottom = doc.page.margins.bottom;
     doc.page.margins.bottom = 0;
     doc.rotate(-32, { origin: [doc.page.width / 2, doc.page.height / 2] });
-    doc.font('Helvetica-Bold').fontSize(86).fillColor(watermark.colour || '#000000').opacity(0.06)
+    doc.font(p.f.bold).fontSize(p.fs(86)).fillColor(watermark.colour || '#000000').opacity(0.06)
       .text(text.toUpperCase(), 0, (doc.page.height / 2) - 50, { width: doc.page.width, align: 'center', lineBreak: false });
     doc.opacity(1);
     doc.restore();
@@ -810,7 +1115,7 @@ function paintFooter(p) {
 
     const y = doc.page.height - originalBottom + 12;
     doc.strokeColor(theme.line).lineWidth(0.5).moveTo(left, y - 6).lineTo(left + width, y - 6).stroke();
-    doc.font('Helvetica').fontSize(7.5).fillColor(theme.muted);
+    doc.font(p.f.regular).fontSize(p.fs(7.5)).fillColor(theme.muted);
     if (text.trim()) doc.text(text, left, y, { width: width - 100, align: 'left', lineBreak: false, ellipsis: true });
     if (footer.show_page_numbers !== false) {
       doc.text(`Page ${i - range.start + 1} of ${range.count}`, left + width - 90, y, { width: 90, align: 'right', lineBreak: false });

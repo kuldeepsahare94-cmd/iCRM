@@ -28,6 +28,7 @@ require('./db-phase36-reports');
 require('./db-phase37-calendar');
 require('./db-phase38-numbering');
 require('./db-phase39-documents');
+require('./db-phase40-template-library');
 
 const app = express();
 
