@@ -343,6 +343,8 @@ export const api = {
   deleteDocumentTemplate: (id) => req('DELETE', `/document-templates/${id}`),
   makeTemplateDefault: (id) => req('POST', `/document-templates/${id}/default`, {}),
   restoreTemplateVersion: (id, version) => req('POST', `/document-templates/${id}/restore/${version}`, {}),
+  // One search behind the attendee picker and the record selector.
+  calendarPeople: (params) => req('GET', '/calendar/people' + qs(params)),
   templateCatalog: () => req('GET', '/document-templates/catalog'),
   // The ready-made library: every template plus its config (the browser draws
   // the thumbnails from those), facets, recents and recommendations, in one

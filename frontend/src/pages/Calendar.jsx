@@ -26,6 +26,7 @@ import {
   Video, ExternalLink, Trash2, AlertTriangle, Link2, Download, CheckCircle2, Phone, ListTodo,
 } from 'lucide-react';
 import { api } from '../api';
+import { RecordPicker, AttendeePicker, TypeBadge } from '../components/RecordPicker';
 import { PageHeader, EmptyState, friendlyError } from '../components/ui';
 import { usePermissions } from '../context/usePermissions';
 
@@ -463,6 +464,20 @@ function EventDetail({ event, onClose, onEdit, onDelete, can }) {
 // Create / edit
 // ---------------------------------------------------------------------------
 
+// A platform choice reads better as a set of chips than a dropdown — the
+// options are few, and which ones exist is itself information.
+function PlatformChip({ active, onClick, label, tone }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors"
+      style={active
+        ? { background: tone || 'var(--color-brand)', color: '#fff', border: `1px solid ${tone || 'var(--color-brand)'}` }
+        : { background: '#fff', color: 'var(--color-muted)', border: '1px solid var(--color-line)' }}>
+      {label}
+    </button>
+  );
+}
+
 function EventForm({ initial, onClose, onSaved }) {
   const [form, setForm] = useState(() => ({
     meeting_title: initial?.meeting_title || '',
@@ -476,7 +491,19 @@ function EventForm({ initial, onClose, onSaved }) {
     related_module: initial?.related_module || '',
     related_record_id: initial?.related_record_id || '',
     reminder_minutes: initial?.reminder_minutes ?? 15,
+    online_platform: initial?.online_platform || '',
   }));
+  // The picked record as a human-readable object. The numeric id still goes
+  // to the server; it is simply no longer what the user sees or types.
+  const [record, setRecord] = useState(initial?.related_record || null);
+  const [attendees, setAttendees] = useState(initial?.attendees || []);
+  // Which online platforms this user can actually create a meeting on.
+  const [providers, setProviders] = useState(null);
+  useEffect(() => {
+    api.calendarConnections()
+      .then((rows) => setProviders((rows || []).filter((c) => c.status === 'connected' && c.write_enabled)))
+      .catch(() => setProviders([]));
+  }, []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [conflicts, setConflicts] = useState([]);
@@ -516,9 +543,13 @@ function EventForm({ initial, onClose, onSaved }) {
         video_link: form.video_link || null,
         agenda: form.agenda || null,
         meeting_type: form.meeting_type,
-        related_module: form.related_module || null,
-        related_record_id: form.related_record_id || null,
+        related_module: record ? record.module : null,
+        related_record_id: record ? record.id : null,
         reminder_minutes: form.reminder_minutes === '' ? null : Number(form.reminder_minutes),
+        attendees: attendees.map((a) => ({
+          kind: a.kind, module: a.module, record_id: a.record_id, name: a.name, email: a.email,
+        })),
+        online_platform: form.online_platform || null,
       };
       if (meetingId) await api.updateCalendarEvent(meetingId, body);
       else await api.createCalendarEvent(body);
@@ -615,31 +646,64 @@ function EventForm({ initial, onClose, onSaved }) {
               placeholder="Office, customer site, or a city" />
           </label>
 
-          <label className="block">
-            <span className="block text-xs font-medium text-ink mb-1">Meeting link</span>
-            <input value={form.video_link} onChange={(e) => set('video_link', e.target.value)} className={field}
-              placeholder="https://meet.google.com/…" />
-          </label>
+          {/* Online meeting (§5, §6). The platform list is exactly what this
+              user has connected — offering Google Meet with no Google
+              account attached would promise a link the CRM cannot create.
+              There is no free-text link box any more: a join URL comes back
+              from the provider or it does not exist. */}
+          <div className="block">
+            <span className="block text-xs font-medium mb-1" style={{ color: 'var(--color-ink)' }}>Online meeting</span>
+            {providers === null ? (
+              <div className="skeleton h-9 rounded-lg" />
+            ) : providers.length === 0 ? (
+              <div className="rounded-lg px-3 py-2.5 text-[12px] flex items-start gap-2"
+                style={{ background: 'var(--color-warning-soft)', border: '1px solid #FDE68A', color: 'var(--color-warning-strong)' }}>
+                <span className="shrink-0">⚠</span>
+                <span>
+                  No calendar connected, so a Meet or Teams link cannot be created.{' '}
+                  <Link to="/settings/calendar" className="font-semibold underline">Connect a calendar</Link>{' '}
+                  to schedule online meetings.
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <PlatformChip active={!form.online_platform} onClick={() => set('online_platform', '')}
+                  label="In person" />
+                {providers.some((p) => p.provider === 'google') && (
+                  <PlatformChip active={form.online_platform === 'google_meet'}
+                    onClick={() => set('online_platform', 'google_meet')} label="Google Meet" tone="#10B981" />
+                )}
+                {providers.some((p) => p.provider === 'microsoft') && (
+                  <PlatformChip active={form.online_platform === 'teams'}
+                    onClick={() => set('online_platform', 'teams')} label="Microsoft Teams" tone="#3B82F6" />
+                )}
+              </div>
+            )}
+            {form.online_platform && (
+              <p className="text-[11px] mt-1.5" style={{ color: 'var(--color-muted)' }}>
+                The join link is created by the provider when this meeting syncs, and appears here once it exists.
+              </p>
+            )}
+            {initial?.video_link && (
+              <a href={initial.video_link} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-[12px] font-semibold mt-2"
+                style={{ color: 'var(--color-brand)' }}>
+                Join meeting →
+              </a>
+            )}
+          </div>
+
+          {/* Participants (§8–§14). */}
+          <AttendeePicker value={attendees} onChange={setAttendees} />
 
           {/* Linking to a record is what makes this a CRM calendar rather than
               a second inbox — the meeting then shows on the account, the deal
               and the customer timeline. */}
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block min-w-0">
-              <span className="block text-xs font-medium text-ink mb-1">Relates to</span>
-              <select value={form.related_module} onChange={(e) => set('related_module', e.target.value)} className={field}>
-                <option value="">Nothing in particular</option>
-                {['leads', 'accounts', 'contacts', 'opportunities', 'quotations', 'tickets'].map((m) => (
-                  <option key={m} value={m}>{m[0].toUpperCase() + m.slice(1)}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block min-w-0">
-              <span className="block text-xs font-medium text-ink mb-1">Record ID</span>
-              <input value={form.related_record_id} onChange={(e) => set('related_record_id', e.target.value)}
-                className={field} placeholder="e.g. 412" />
-            </label>
-          </div>
+          {/* Was two fields: a module dropdown and a box asking for a numeric
+              "Record ID (e.g. 412)". One search across every module replaces
+              both — search by name, company, email or phone, and the id is
+              kept internally (§38–§44). */}
+          <RecordPicker value={record} onChange={setRecord} />
 
           <label className="block">
             <span className="block text-xs font-medium text-ink mb-1">Agenda</span>
