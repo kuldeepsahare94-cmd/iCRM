@@ -260,6 +260,7 @@ function meetingToNeutral(m) {
   let attendees = [];
   try { attendees = m.attendees_json ? JSON.parse(m.attendees_json) : []; } catch { attendees = []; }
   return {
+    meeting_id: m.id,
     title: m.meeting_title,
     description: [m.agenda, m.meeting_notes].filter(Boolean).join('\n\n') || null,
     location: m.location || m.video_link || null,
@@ -269,12 +270,66 @@ function meetingToNeutral(m) {
     time_zone: m.time_zone || null,
     attendees,
     reminder_minutes: m.reminder_minutes,
+    // Ask the provider to mint a conference only when the organiser chose
+    // this platform AND one has not already been created. Asking again on a
+    // later sync is how a meeting ends up with a second, different room.
+    request_conference: shouldRequestConference(m, connectionProvider(m)),
   };
+}
+
+// The platform the user picked maps to exactly one provider. Asking Google
+// for a Teams meeting is not a thing, so a mismatch requests nothing and the
+// meeting stays physical on that calendar.
+const PLATFORM_PROVIDER = { google_meet: 'google', teams: 'microsoft' };
+
+let currentProvider = null;
+function connectionProvider() { return currentProvider; }
+
+function shouldRequestConference(m, provider) {
+  if (!m.online_platform) return null;
+  if (m.online_status === 'created' && m.video_link) return null;
+  if (PLATFORM_PROVIDER[m.online_platform] !== provider) return null;
+  return m.online_platform;
+}
+
+// Records what the provider actually created, so the CRM's join link is
+// always something a provider minted. A failure is written down too — a
+// meeting that asked for Meet and didn't get one must not look physical.
+const saveConference = db.prepare(`
+  UPDATE meetings SET
+    video_link = COALESCE(?, video_link),
+    online_provider = ?, online_meeting_id = ?, online_dial_in = ?,
+    online_status = ?, online_error = ?, updated_at = datetime('now')
+  WHERE id = ?`);
+
+function recordConference(meetingId, conference, userId) {
+  if (!conference || !conference.url) return;
+  saveConference.run(
+    conference.url, conference.provider, conference.id || null,
+    conference.dial_in || null,
+    conference.status === 'success' ? 'created' : 'pending',
+    null, meetingId,
+  );
+  audit(meetingId, 'online_meeting_created',
+    `${conference.name || conference.provider} · ${conference.status || 'created'}`, 'success', userId);
+}
+
+function recordConferenceFailure(meetingId, message, userId) {
+  saveConference.run(null, null, null, null, 'failed', String(message).slice(0, 300), meetingId);
+  audit(meetingId, 'online_meeting_failed', String(message).slice(0, 300), 'error', userId);
+}
+
+function audit(meetingId, action, detail, status, userId) {
+  try {
+    db.prepare(`INSERT INTO calendar_audit_log (user_id, meeting_id, action, detail, status)
+      VALUES (?, ?, ?, ?, ?)`).run(userId || null, meetingId || null, action, detail || null, status || 'success');
+  } catch { /* the audit trail must never be the reason a sync fails */ }
 }
 
 async function push(connection) {
   if (!connection.write_enabled) return { pushed: 0 };
   const provider = providers.get(connection.provider);
+  currentProvider = connection.provider;
 
   const meetings = meetingsToPush(connection);
   const linkFor = db.prepare('SELECT * FROM calendar_links WHERE meeting_id = ? AND connection_id = ?');
@@ -297,15 +352,20 @@ async function push(connection) {
           accessToken, calendarId: connection.calendar_id, event: neutral,
         }));
         insertLink.run(m.id, connection.id, remote.external_id, hash);
+        if (neutral.request_conference) recordConference(m.id, remote.conference, connection.user_id);
         pushed += 1;
-      } else if (link.last_pushed_hash !== hash) {
+      } else if (link.last_pushed_hash !== hash || neutral.request_conference) {
         const remote = await withFreshToken(connection, (accessToken) => provider.updateEvent({
           accessToken, calendarId: connection.calendar_id, externalId: link.external_id, event: neutral,
         }));
         touchLink.run(hash, remote.external_id || link.external_id, link.id);
+        if (neutral.request_conference) recordConference(m.id, remote.conference, connection.user_id);
         pushed += 1;
       }
     } catch (err) {
+      // A conference the organiser asked for and did not get is reported on
+      // the meeting, not swallowed — otherwise it silently looks physical.
+      if (neutral.request_conference) recordConferenceFailure(m.id, err.message, connection.user_id);
       // One bad meeting must not stop the rest. A title the provider rejects,
       // an attendee address that does not exist — those are data problems with
       // that one row, and failing the whole sync over it would mean nobody's

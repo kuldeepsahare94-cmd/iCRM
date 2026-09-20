@@ -32,6 +32,7 @@ const secrets = require('../services/secrets');
 const sync = require('../services/calendar/syncService');
 const feed = require('../services/calendar/feed');
 const shape = require('../services/calendar/shape');
+const people = require('../services/calendar/people');
 
 function fail(res, err) {
   const status = err.status || 500;
@@ -306,6 +307,21 @@ function teamUserIds() {
   return db.prepare('SELECT id FROM users WHERE active = 1').all().map((u) => u.id);
 }
 
+// §12, §39–§44 — ONE search behind both the attendee picker and the
+// "relates to" selector. Returns names, type badges and the record's own
+// email; the numeric id travels with the result but is never the thing a
+// person reads or types.
+router.get('/people', requirePermission('calendar', 'view'), (req, res) => {
+  try {
+    const modules = String(req.query.modules || '').split(',').map((m) => m.trim()).filter(Boolean);
+    res.json(people.search({
+      q: req.query.q,
+      modules: modules.length ? modules : undefined,
+      limit: Math.min(Number(req.query.limit) || 20, 50),
+    }));
+  } catch (err) { fail(res, err); }
+});
+
 router.get('/events', requirePermission('calendar', 'view'), async (req, res) => {
   try {
     const { from, to } = req.query;
@@ -349,11 +365,45 @@ router.get('/events', requirePermission('calendar', 'view'), async (req, res) =>
 
 const MEETING_COLUMNS = ['meeting_title', 'related_module', 'related_record_id', 'meeting_type', 'location',
   'video_link', 'start_datetime', 'end_datetime', 'organizer_id', 'assigned_user_id', 'status', 'agenda',
-  'meeting_notes', 'outcome', 'next_action', 'time_zone', 'all_day', 'reminder_minutes', 'attendees_json'];
+  'meeting_notes', 'outcome', 'next_action', 'time_zone', 'all_day', 'reminder_minutes', 'attendees_json',
+  'online_platform'];
 
 function meetingPayload(body, userId) {
   const v = {};
   for (const c of MEETING_COLUMNS) v[c] = body[c] === undefined ? null : body[c];
+
+  // Attendees arrive as picker selections — {kind, module, record_id} for CRM
+  // records, {email, name} for typed addresses. The server fetches each
+  // record's own address, validates, and de-duplicates on a normalised email,
+  // so the same person picked twice by two different routes is invited once.
+  if (body.attendees !== undefined) {
+    const { attendees, problems } = people.resolveAttendees(body.attendees);
+    if (problems.length) {
+      const err = new Error(problems[0].reason);
+      err.status = 400;
+      err.problems = problems;
+      throw err;
+    }
+    v.attendees_json = JSON.stringify(attendees);
+  }
+
+  // An online meeting on a platform nobody has connected cannot be created,
+  // and saying so here is far kinder than a meeting that silently has no
+  // link when the organiser is already in the room.
+  if (v.online_platform) {
+    const provider = { google_meet: 'google', teams: 'microsoft' }[v.online_platform];
+    const connected = db.prepare(`SELECT COUNT(*) c FROM calendar_connections
+      WHERE user_id = ? AND provider = ? AND status = 'connected' AND write_enabled = 1`)
+      .get(userId, provider).c;
+    if (!connected) {
+      throw Object.assign(new Error(
+        v.online_platform === 'google_meet'
+          ? 'Connect your Google Calendar before creating a Google Meet meeting.'
+          : 'Connect your Microsoft Outlook calendar before creating a Teams meeting.',
+      ), { status: 400 });
+    }
+    v.meeting_type = v.meeting_type || 'Online';
+  }
   if (!v.meeting_title) throw Object.assign(new Error('A title is required.'), { status: 400 });
   if (!v.start_datetime) throw Object.assign(new Error('A start time is required.'), { status: 400 });
   v.status = v.status || 'Scheduled';
@@ -366,7 +416,11 @@ function meetingPayload(body, userId) {
   v.assigned_user_id = v.assigned_user_id || userId;
   v.organizer_id = v.organizer_id || userId;
   v.all_day = v.all_day ? 1 : 0;
-  if (Array.isArray(body.attendees)) v.attendees_json = JSON.stringify(body.attendees);
+  // NOTE: attendees are resolved at the top of this function, not here. There
+  // used to be a `v.attendees_json = JSON.stringify(body.attendees)` on this
+  // line, which ran AFTER that resolution and overwrote it with the raw
+  // request body — so emails were never fetched from the records, duplicates
+  // were never removed, and an attendee with no address was stored as-is.
   return v;
 }
 

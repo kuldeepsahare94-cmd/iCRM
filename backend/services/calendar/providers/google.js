@@ -173,6 +173,33 @@ async function listEvents({ accessToken, calendarId, cursor, windowStart, window
   return { events, cursor: nextCursor, cursorExpired: false };
 }
 
+// What Google actually minted, read back off the created event. Every field
+// here comes from the provider; none of it is constructed by the CRM.
+//
+// createRequest.status.statusCode matters: Google creates the conference
+// asynchronously, so a create can legitimately return "pending" with no join
+// URL yet, and a later sync fills it in. Reporting that honestly is the
+// difference between "still being created" and a join button that 404s.
+function conferenceFrom(g) {
+  const cd = g.conferenceData;
+  if (!cd) return null;
+  const entries = cd.entryPoints || [];
+  const video = entries.find((e) => e.entryPointType === 'video') || {};
+  const phone = entries.find((e) => e.entryPointType === 'phone') || {};
+  const status = (cd.createRequest && cd.createRequest.status && cd.createRequest.status.statusCode) || null;
+  const url = video.uri || g.hangoutLink || null;
+  return {
+    provider: 'google_meet',
+    id: cd.conferenceId || null,
+    url,
+    dial_in: phone.uri ? `${phone.uri}${phone.pin ? ` PIN ${phone.pin}` : ''}` : null,
+    // "success" once Google has the conference; "pending" while it is being
+    // made; "failure" if it could not be.
+    status: status || (url ? 'success' : null),
+    name: (cd.conferenceSolution && cd.conferenceSolution.name) || 'Google Meet',
+  };
+}
+
 // Google's event -> the CRM's neutral event.
 function toNeutral(g) {
   const allDay = !!(g.start && g.start.date && !g.start.dateTime);
@@ -204,12 +231,35 @@ function toNeutral(g) {
     web_link: g.htmlLink || null,
     online_meeting_url: (g.conferenceData && g.conferenceData.entryPoints
       && (g.conferenceData.entryPoints.find((e) => e.entryPointType === 'video') || {}).uri) || g.hangoutLink || null,
+    conference: conferenceFrom(g),
     is_private: g.visibility === 'private',
     external_updated_at: g.updated || null,
   };
 }
 
 // The CRM's neutral event -> Google's payload.
+// A Meet link is created by ASKING Google to create one, not by writing a
+// URL into the event. Google mints the conference, returns its id, join URL
+// and dial-in numbers, and those are what the CRM stores. Anything the CRM
+// invented itself would be a string that looks like a meeting and isn't one.
+//
+// Two details that are easy to get wrong and silently produce no conference:
+//   * requestId must be unique per create request. Reusing one makes Google
+//     return the SAME conference, which is how two different meetings end up
+//     sharing a room.
+//   * conferenceDataVersion=1 must be on the query string. Without it the
+//     whole conferenceData field is ignored and the event is created with no
+//     conference and no error.
+function conferenceRequest(e) {
+  if (!e.request_conference) return undefined;
+  return {
+    createRequest: {
+      requestId: `crm-${e.meeting_id || 'x'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      conferenceSolutionKey: { type: 'hangoutsMeet' },
+    },
+  };
+}
+
 function fromNeutral(e) {
   const body = {
     summary: e.title,
@@ -217,6 +267,8 @@ function fromNeutral(e) {
     location: e.location || undefined,
     status: 'confirmed',
   };
+  const conference = conferenceRequest(e);
+  if (conference) body.conferenceData = conference;
   if (e.all_day) {
     body.start = { date: e.start_at };
     // Back to Google's exclusive end.
@@ -235,8 +287,11 @@ function fromNeutral(e) {
 }
 
 async function createEvent({ accessToken, calendarId, event }) {
+  // conferenceDataVersion=1 is what makes Google honour conferenceData at
+  // all. Sent on every create so the flag can never be forgotten on the one
+  // path that needs it.
   const res = await httpJson(
-    `${API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=all`,
+    `${API_BASE}/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=all&conferenceDataVersion=1`,
     { method: 'POST', token: accessToken, json: fromNeutral(event) },
   );
   return toNeutral(res);
@@ -244,7 +299,7 @@ async function createEvent({ accessToken, calendarId, event }) {
 
 async function updateEvent({ accessToken, calendarId, externalId, event }) {
   const res = await httpJson(
-    `${API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(externalId)}?sendUpdates=all`,
+    `${API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(externalId)}?sendUpdates=all&conferenceDataVersion=1`,
     { method: 'PATCH', token: accessToken, json: fromNeutral(event) },
   );
   return toNeutral(res);

@@ -165,6 +165,26 @@ async function listEvents({ accessToken, calendarId, cursor, windowStart, window
   return { events, cursor: nextCursor, cursorExpired: false };
 }
 
+// What Graph actually created. Dial-in details are only present when the
+// tenant has audio conferencing licensed, so they are reported when given and
+// omitted otherwise rather than invented.
+function conferenceFrom(m) {
+  const om = m.onlineMeeting;
+  const url = (om && om.joinUrl) || m.onlineMeetingUrl || null;
+  if (!url && !m.isOnlineMeeting) return null;
+  const phones = (om && om.phones) || [];
+  return {
+    provider: 'teams',
+    id: m.onlineMeetingProvider === 'teamsForBusiness' ? (om && om.conferenceId) || null : null,
+    url,
+    dial_in: phones.length
+      ? `${phones[0].number}${om && om.conferenceId ? ` ID ${om.conferenceId}` : ''}`
+      : (om && om.tollNumber) || null,
+    status: url ? 'success' : 'pending',
+    name: 'Microsoft Teams',
+  };
+}
+
 function toNeutral(m) {
   // A deleted item in a delta response is a stub: an id plus @removed. There
   // is no title or time on it, so it must be recognised before anything tries
@@ -208,6 +228,7 @@ function toNeutral(m) {
     series_id: m.seriesMasterId || null,
     web_link: m.webLink || null,
     online_meeting_url: (m.onlineMeeting && m.onlineMeeting.joinUrl) || m.onlineMeetingUrl || null,
+    conference: conferenceFrom(m),
     is_private: m.sensitivity === 'private' || m.sensitivity === 'confidential',
     external_updated_at: m.lastModifiedDateTime || null,
   };
@@ -231,6 +252,14 @@ function fromNeutral(e) {
     body: { contentType: 'text', content: e.description || '' },
     isAllDay: !!e.all_day,
   };
+  // Graph mints the Teams meeting when the event is created with these two
+  // fields. The join URL comes back on the response as onlineMeeting.joinUrl —
+  // the CRM never builds a teams.microsoft.com URL itself, because a
+  // hand-made one is not a meeting anybody can join.
+  if (e.request_conference) {
+    body.isOnlineMeeting = true;
+    body.onlineMeetingProvider = 'teamsForBusiness';
+  }
   if (e.location) body.location = { displayName: e.location };
   if (e.all_day) {
     body.start = { dateTime: `${e.start_at}T00:00:00`, timeZone: 'UTC' };

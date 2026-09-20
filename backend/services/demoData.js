@@ -938,7 +938,11 @@ function seed() {
         'Quarterly review', 'Implementation kick-off', 'Training session']),
       t.module, t.id, type,
       type === 'Online' ? 'Google Meet' : pick(PLACES)[2],
-      type === 'Online' ? 'https://meet.google.com/demo-link' : null,
+      // Deliberately null. This used to seed 'https://meet.google.com/demo-link',
+      // which put a Join button in front of a URL that joins nothing. A real
+      // join link only ever comes back from Google or Microsoft when a
+      // connected calendar creates the conference.
+      null,
       start, plusHours(start, 1), u, u,
       days < 0 ? 'Scheduled' : pick(['Held', 'Held', 'Held', 'Held', 'Cancelled', 'No Show']),
       `${TAG} demo meeting`,
