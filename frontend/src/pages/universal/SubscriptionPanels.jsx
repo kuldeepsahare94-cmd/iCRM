@@ -15,7 +15,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Building2, CalendarClock, History, Package, Plus, RefreshCw, Repeat, Wallet, X } from 'lucide-react';
+import { Building2, CalendarClock, ChevronDown, History, Package, Plus, RefreshCw, Repeat, Wallet, X } from 'lucide-react';
 import { api } from '../../api';
 import StatusBadge from '../../components/StatusBadge';
 
@@ -172,6 +172,9 @@ export default function SubscriptionPanels({ recordId, canRenew, canViewPayments
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [renewing, setRenewing] = useState(false);
+  // The schedule can run to dozens of rows; it stays folded into a summary
+  // until someone asks for the full list.
+  const [showPayments, setShowPayments] = useState(false);
 
   const load = () => api.subscriptionSchedule(recordId).then((d) => { setData(d); setError(''); }).catch((e) => setError(e.message));
   useEffect(() => { setData(null); load(); }, [recordId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -241,45 +244,78 @@ export default function SubscriptionPanels({ recordId, canRenew, canViewPayments
       </div>
 
       <Card title={`Payment schedule · ${data.payments.length} payment${data.payments.length === 1 ? '' : 's'}`} icon={Wallet}
-        action={<span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Records in the Payments module</span>}>
+        action={data.payments.length > 0 && (
+          <button type="button" onClick={() => setShowPayments((v) => !v)} aria-expanded={showPayments} aria-controls="subscription-payments"
+            className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-line bg-white transition-colors hover:bg-[var(--color-brand-faint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{ color: 'var(--color-brand)' }}>
+            {showPayments ? 'Hide payments' : `Show all ${data.payments.length} payments`}
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showPayments ? 'rotate-180' : ''}`} />
+          </button>
+        )}>
         {data.payments.length === 0 ? (
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
             {s.status === 'Active' ? 'No payments scheduled — check the term, frequency and start date.' : `Payments are generated when the subscription is Active (it is ${s.status}).`}
           </p>
-        ) : (
+        ) : (() => {
+          const paid = data.payments.filter((p) => p.status === 'Paid').length;
+          const overdueCount = data.payments.filter((p) => ['Pending', 'Partial'].includes(p.status) && p.due_date && d10(p.due_date) < t).length;
+          const next = data.payments.find((p) => ['Pending', 'Partial', 'Failed'].includes(p.status));
+          const total = data.payments.reduce((a, p) => a + Number(p.amount || 0), 0);
+          const pct = total > 0 ? Math.min(100, (received / total) * 100) : 0;
+          return (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-center">
+                <Stat label="Paid">{paid} of {data.payments.length}</Stat>
+                <Stat label="Received">{inr(received)} <span className="font-normal" style={{ color: 'var(--color-muted)' }}>of {inr(total)}</span></Stat>
+                <Stat label="Next payment">{next ? <>{d10(next.due_date)} · {inr(next.amount)}</> : 'All paid'}</Stat>
+                <Stat label="Overdue">
+                  <span style={{ color: overdueCount ? 'var(--color-danger)' : undefined }}>{overdueCount ? `${overdueCount} payment${overdueCount === 1 ? '' : 's'}` : 'None'}</span>
+                </Stat>
+              </div>
+              <div className="h-[6px] rounded-full overflow-hidden mt-3" style={{ background: 'var(--color-canvas)' }}
+                role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Share of schedule received">
+                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--color-success)' }} />
+              </div>
+              {showPayments && (
+                <div id="subscription-payments" className="mt-4">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left border-b border-line text-[11px] uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
-                  <th className="py-2 pr-3">#</th><th className="py-2 pr-3">Payment</th><th className="py-2 pr-3">Due date</th>
-                  <th className="py-2 pr-3 text-right">Amount</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Received</th><th className="py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {data.payments.map((p) => {
-                  const overdue = ['Pending', 'Partial'].includes(p.status) && p.due_date && d10(p.due_date) < t;
-                  return (
-                    <tr key={p.id} className="border-b border-line/60">
-                      <td className="py-2 pr-3 tabular-nums" style={{ color: 'var(--color-muted)' }}>{p.installment_number}</td>
-                      <td className="py-2 pr-3">
-                        {canViewPayments ? <Link to={`/records/payments/${p.id}`} className="font-medium text-ink hover:text-[var(--color-brand)]">{p.payment_number}</Link> : p.payment_number}
-                      </td>
-                      <td className="py-2 pr-3 whitespace-nowrap" style={{ color: overdue ? 'var(--color-danger)' : undefined }}>{d10(p.due_date)}{overdue ? ' · overdue' : ''}</td>
-                      <td className="py-2 pr-3 text-right tabular-nums">{inr(p.amount)}</td>
-                      <td className="py-2 pr-3"><StatusBadge status={p.status} /></td>
-                      <td className="py-2 pr-3 whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>{['Paid', 'Partial'].includes(p.status) ? d10(p.payment_date) : '—'}</td>
-                      <td className="py-2 text-right">
-                        {canViewPayments && p.status !== 'Paid' && (
-                          <Link to={`/payments/${p.id}`} className="text-xs font-semibold whitespace-nowrap" style={{ color: 'var(--color-brand)' }}>Record payment</Link>
-                        )}
-                      </td>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left border-b border-line text-[11px] uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
+                      <th className="py-2 pr-3">#</th><th className="py-2 pr-3">Payment</th><th className="py-2 pr-3">Due date</th>
+                      <th className="py-2 pr-3 text-right">Amount</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Received</th><th className="py-2" />
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  </thead>
+                  <tbody>
+                    {data.payments.map((p) => {
+                      const overdue = ['Pending', 'Partial'].includes(p.status) && p.due_date && d10(p.due_date) < t;
+                      return (
+                        <tr key={p.id} className="border-b border-line/60">
+                          <td className="py-2 pr-3 tabular-nums" style={{ color: 'var(--color-muted)' }}>{p.installment_number}</td>
+                          <td className="py-2 pr-3">
+                            {canViewPayments ? <Link to={`/records/payments/${p.id}`} className="font-medium text-ink hover:text-[var(--color-brand)]">{p.payment_number}</Link> : p.payment_number}
+                          </td>
+                          <td className="py-2 pr-3 whitespace-nowrap" style={{ color: overdue ? 'var(--color-danger)' : undefined }}>{d10(p.due_date)}{overdue ? ' · overdue' : ''}</td>
+                          <td className="py-2 pr-3 text-right tabular-nums">{inr(p.amount)}</td>
+                          <td className="py-2 pr-3"><StatusBadge status={p.status} /></td>
+                          <td className="py-2 pr-3 whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>{['Paid', 'Partial'].includes(p.status) ? d10(p.payment_date) : '—'}</td>
+                          <td className="py-2 text-right">
+                            {canViewPayments && p.status !== 'Paid' && (
+                              <Link to={`/payments/${p.id}`} className="text-xs font-semibold whitespace-nowrap" style={{ color: 'var(--color-brand)' }}>Record payment</Link>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+                  <p className="text-[11px] mt-2" style={{ color: 'var(--color-faint)' }}>These are records in the Payments module.</p>
+                </div>
+              )}
+            </>
+          );
+        })()}
       </Card>
 
       <Card title="Renewal history" icon={History}>
