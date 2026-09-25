@@ -1103,30 +1103,51 @@ export default function Dashboard() {
   return (
     <div className="dash-canvas relative -m-4 sm:-m-6 p-4 sm:p-6">
     <div className="relative max-w-[1600px] mx-auto">
-      {/* Header: a gradient hero rather than text on the page background. */}
-      <header className="dash-hero relative overflow-hidden rounded-[20px] px-5 sm:px-6 py-5 text-white">
+      {/* Header: a light, faded white-to-blue banner with the mountain
+          illustration — calm enough that the figures below stay the focus. */}
+      <header className="dash-hero relative overflow-hidden rounded-[20px] px-5 sm:px-6 py-5">
         <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
-          <div className="absolute -top-24 -right-16 w-80 h-80 rounded-full" style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.22), transparent 65%)' }} />
-          <div className="absolute -bottom-28 left-1/4 w-96 h-72 rounded-full" style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.35), transparent 65%)' }} />
-          <div className="absolute inset-0 opacity-[0.12]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }} />
+          <div className="absolute -top-24 right-[18%] w-96 h-72 rounded-full" style={{ background: 'radial-gradient(circle, rgba(147,197,253,0.35), transparent 65%)' }} />
+          <div className="absolute -bottom-24 -left-10 w-80 h-64 rounded-full" style={{ background: 'radial-gradient(circle, rgba(196,181,253,0.25), transparent 65%)' }} />
+          <div className="absolute inset-0 opacity-60" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(99,102,241,0.08) 1px, transparent 0)', backgroundSize: '22px 22px' }} />
         </div>
         <div className="relative flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3.5 min-w-0">
-            <span className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.18)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.25)' }}>
-              <Sun className="w-7 h-7" style={{ color: '#FDE68A' }} aria-hidden="true" />
+            <span className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+              style={{ background: '#FFFFFF', boxShadow: '0 6px 16px -8px rgba(59,130,246,0.45), inset 0 0 0 1px rgba(191,219,254,0.8)' }}>
+              <Sun className="w-7 h-7" style={{ color: '#F59E0B' }} aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <h1 className="text-[22px] sm:text-[24px] font-extrabold leading-tight tracking-[-0.02em]" style={{ fontFamily: 'var(--font-display)' }}>
+              <h1 className="text-[22px] sm:text-[24px] font-extrabold leading-tight tracking-[-0.02em]" style={{ color: 'var(--color-ink)', fontFamily: 'var(--font-display)' }}>
                 {greeting}, {user?.full_name?.split(' ')[0] || user?.username || 'there'}
               </h1>
-              <p className="text-[13px] mt-0.5 text-white/80">Here is what needs your attention today.</p>
+              <p className="text-[13px] mt-0.5" style={{ color: 'var(--color-muted)' }}>Here is what needs your attention today.</p>
             </div>
           </div>
+
+          {/* Mountain and flag, with the quote beside it. Decorative. */}
+          <div className="hidden lg:flex items-center gap-3 shrink-0 ml-auto" aria-hidden="true">
+            <svg viewBox="0 0 170 96" className="w-[132px] h-[75px] shrink-0">
+              <ellipse cx="85" cy="88" rx="72" ry="7" fill="#BFDBFE" opacity="0.45" />
+              <path d="M0 88 L42 34 L64 58 L96 16 L170 88 Z" fill="#DBEAFE" />
+              <path d="M52 88 L96 16 L140 88 Z" fill="#BFD3FE" />
+              <path d="M83 31 L96 16 L109 31 L101 27 L96 32 L91 27 Z" fill="#FFFFFF" />
+              <rect x="95" y="6" width="1.8" height="22" rx="0.9" fill="#3B5BDB" />
+              <path d="M96.8 6 L114 11.5 L96.8 17 Z" fill="#4F6BED" />
+              <circle cx="34" cy="26" r="3" fill="#93C5FD" opacity="0.8" />
+              <circle cx="146" cy="34" r="2.2" fill="#A5B4FC" opacity="0.7" />
+              <circle cx="128" cy="14" r="1.6" fill="#93C5FD" opacity="0.7" />
+            </svg>
+            <p className="text-[11.5px] italic leading-snug max-w-[150px]" style={{ color: 'var(--color-muted)' }}>
+              &ldquo;Small steps today, big results tomorrow.&rdquo;
+            </p>
+          </div>
+
           <div className="flex items-center gap-2.5 flex-wrap">
-            {refreshing && <RefreshCw className="w-4 h-4 animate-spin text-white/80" aria-label="Refreshing" />}
-            <span className="inline-flex items-center gap-2 text-[13px] font-medium px-3 py-1.5 rounded-xl"
-              style={{ background: 'rgba(255,255,255,0.16)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.22)' }}>
-              <CalendarDays className="w-4 h-4 text-white/85" /> {todayLabel}
+            {refreshing && <RefreshCw className="w-4 h-4 animate-spin" style={{ color: 'var(--color-faint)' }} aria-label="Refreshing" />}
+            <span className="inline-flex items-center gap-2 text-[13px] font-semibold px-3 py-1.5 rounded-xl"
+              style={{ background: '#FFFFFF', color: 'var(--color-ink)', boxShadow: '0 4px 12px -8px rgba(59,130,246,0.5), inset 0 0 0 1px rgba(191,219,254,0.9)' }}>
+              <CalendarDays className="w-4 h-4" style={{ color: '#3B82F6' }} /> {todayLabel}
             </span>
             <ScopeSelect data={data} ctx={ctx} onChange={setScope} />
           </div>
