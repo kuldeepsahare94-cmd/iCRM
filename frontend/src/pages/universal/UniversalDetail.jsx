@@ -21,6 +21,7 @@ import DocumentActionsPanel from './DocumentActionsPanel';
 import DocumentPaymentsPanel from './DocumentPaymentsPanel';
 import SubscriptionPanels, { CustomerSubscriptions } from './SubscriptionPanels';
 import AssignPicker from '../../components/AssignPicker';
+import { TicketSupportPanel, IncidentPanel, ProblemPanel } from '../support/SupportRecordPanels';
 import { USER_TYPES } from './fieldUtils';
 
 // Modules whose records are sales documents: line items, a PDF, a place in a
@@ -30,7 +31,8 @@ const SALES_DOCUMENT_MODULES = new Set(['quotations', 'proforma_invoices', 'invo
 // Any array-of-objects the dedicated module route embeds in its detail
 // response (e.g. Accounts embeds contacts/opportunities/quotations/...) is
 // rendered as its own tab automatically — no per-module wiring needed.
-const NON_RELATION_ARRAY_KEYS = new Set(); // reserved, currently nothing to exclude
+// Ticket replies render in the Support panel's conversation, not as a tab.
+const NON_RELATION_ARRAY_KEYS = new Set(['replies']);
 
 // Follow-up Timer (master prompt section 11) shares its field-detection and
 // status logic with UniversalList's small dot indicator — see followupUtils.js.
@@ -927,6 +929,17 @@ export default function UniversalDetail() {
       {module.api_name === 'subscriptions' && (
         <SubscriptionPanels recordId={id} canRenew={can('subscriptions', 'create')}
           canViewPayments={can('payments', 'view')} onUpdated={load} />
+      )}
+
+      {/* Support Desk: SLA, coverage, conversation, timeline and actions. */}
+      {module.api_name === 'tickets' && can('support', 'view') && (
+        <TicketSupportPanel record={record} canEdit={can('tickets', 'edit')} onUpdated={load} />
+      )}
+      {module.api_name === 'major_incidents' && (
+        <IncidentPanel record={record} canEdit={can('major_incidents', 'edit')} onUpdated={load} />
+      )}
+      {module.api_name === 'problems' && (
+        <ProblemPanel record={record} canEdit={can('problems', 'edit')} onUpdated={load} />
       )}
 
       {/* The customer's subscriptions and AMCs, one row per subscription. */}

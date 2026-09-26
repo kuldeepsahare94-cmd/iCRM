@@ -79,7 +79,7 @@ const grad = (t, deg = 135) => `linear-gradient(${deg}deg, ${t.g[0]}, ${t.g[1]})
 // Solid gradient icon tile with a soft coloured shadow — the main source of
 // colour on the page, so the white cards read as rich rather than plain.
 const tile = (t) => ({ background: grad(t), color: '#FFFFFF', boxShadow: `0 8px 16px -8px rgba(${t.rgb}, 0.75)` });
-const PRIORITY_TONE = { Urgent: '#F43F5E', High: '#F97316', Medium: '#F59E0B', Low: '#3B82F6', Unset: '#94A3B8' };
+const PRIORITY_TONE = { Critical: '#F43F5E', Urgent: '#F43F5E', High: '#F97316', Medium: '#F59E0B', Low: '#3B82F6', Unset: '#94A3B8' };
 
 // ---------------------------------------------------------------------------
 // Links
@@ -659,7 +659,7 @@ function MeetingsCard({ m, ctx }) {
   );
 }
 
-const PRIORITY_PILL = { Urgent: ['#FFF1F2', '#BE123C'], High: ['#FFF1F2', '#E11D48'], Medium: ['#FFFBEB', '#B45309'], Low: ['#EFF6FF', '#2563EB'] };
+const PRIORITY_PILL = { Critical: ['#FFF1F2', '#BE123C'], Urgent: ['#FFF1F2', '#BE123C'], High: ['#FFF1F2', '#E11D48'], Medium: ['#FFFBEB', '#B45309'], Low: ['#EFF6FF', '#2563EB'] };
 function TasksCard({ t, ctx }) {
   const to = drillHref(t, ctx);
   return (
