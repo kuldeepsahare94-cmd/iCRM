@@ -1037,9 +1037,9 @@ export default function UniversalDetail() {
       {tab === 'overview' && (
         <div className="mt-5">
           {layout?.sections?.length > 0 ? (
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="md:columns-2 gap-4">
               {layout.sections.map((section, si) => (
-                <div key={si} className="border border-line rounded-xl p-4">
+                <div key={si} className="border border-line rounded-xl p-4 mb-4 break-inside-avoid">
                   <div className="flex items-center gap-2 mb-2 pb-2 border-b border-line">
                     <span className="w-1.5 h-4 rounded-full shrink-0"
                       style={{ background: accentFor(module.api_name).solid }} />
@@ -1059,9 +1059,9 @@ export default function UniversalDetail() {
           ) : detailFields.length === 0 ? (
             <div className="text-sm text-slate-400">No fields configured for this module yet.</div>
           ) : (
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="md:columns-2 gap-4">
               {groupFields(detailFields).map((group) => (
-                <div key={group.title} className="border border-line rounded-xl p-4">
+                <div key={group.title} className="border border-line rounded-xl p-4 mb-4 break-inside-avoid">
                   <div className="flex items-center gap-2 mb-2 pb-2 border-b border-line">
                     <span className="w-1.5 h-4 rounded-full shrink-0"
                       style={{ background: accentFor(module.api_name).solid }} />

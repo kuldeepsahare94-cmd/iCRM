@@ -233,7 +233,7 @@ function MyQueue({ q }) {
   ];
   return (
     <Card title="My Support Queue" action={<Link to="/support/my-work" className="text-[12px] font-semibold" style={{ color: 'var(--color-brand)' }}>View all</Link>}>
-      <ul className="-mx-1">
+      <ul className="-mx-1 flex-1 flex flex-col justify-around">
         {rows.map(([label, m, Icon, c]) => (
           <li key={label}>
             <Link to={ticketsHref(m.params)} className="dash-link flex items-center justify-between gap-2 px-2 py-2 text-[12.5px]">
@@ -250,26 +250,29 @@ function MyQueue({ q }) {
 function Escalations({ e }) {
   return (
     <Card title="Active Escalations" action={<Link to="/support/escalations" className="text-[12px] font-semibold" style={{ color: 'var(--color-brand)' }}>View all</Link>}>
-      <ul className="space-y-0.5 mb-2">
-        <li><Link to={ticketsHref(e.critical.params)} className="dash-link flex items-center justify-between px-2 py-1.5 text-[12.5px]">
+      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 mb-2">
+        <li className="sm:col-span-2"><Link to={ticketsHref(e.critical.params)} className="dash-link flex items-center justify-between px-2 py-1.5 text-[12.5px]">
           <span className="flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-rose-600" />Critical escalations</span><span className="font-bold text-rose-600 tabular-nums">{e.critical.count}</span></Link></li>
         {e.by_level.map((l) => (
           <li key={l.level}><Link to={ticketsHref(l.params)} className="dash-link flex items-center justify-between px-2 py-1.5 text-[12.5px]">
-            <span className="flex items-center gap-2"><Siren className="w-4 h-4 text-amber-600" />{l.level} escalations</span><span className="font-bold tabular-nums">{l.count}</span></Link></li>
+            <span className="flex items-center gap-2 min-w-0"><Siren className="w-4 h-4 shrink-0 text-amber-600" /><span className="truncate">{l.level}</span></span><span className="font-bold tabular-nums">{l.count}</span></Link></li>
         ))}
         {!e.by_level.length && <li className="px-2 text-[12px]" style={{ color: 'var(--color-muted)' }}>No active escalations.</li>}
       </ul>
       {e.rows.length > 0 && (
         <div className="overflow-x-auto">
           <table className="sd-table w-full">
-            <thead><tr><th>Ticket</th><th>Customer</th><th>Priority</th><th>Level</th></tr></thead>
+            <thead><tr><th>Ticket</th><th>Customer</th><th>Level</th></tr></thead>
             <tbody>
-              {e.rows.slice(0, 5).map((r) => (
+              {e.rows.slice(0, 4).map((r) => (
                 <tr key={r.id}>
-                  <td><Link to={r.path} className="font-semibold hover:underline" style={{ color: '#2563EB' }}>{r.ticket_number}</Link></td>
-                  <td className="truncate max-w-[110px]">{r.account_name || '—'}</td>
-                  <td><span style={{ color: PRIORITY_STYLE[r.priority === 'Urgent' ? 'Critical' : r.priority]?.fg }}>{r.priority === 'Urgent' ? 'Critical' : r.priority}</span></td>
-                  <td className="whitespace-nowrap">{r.level_name}</td>
+                  <td className="whitespace-nowrap">
+                    <span className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle" title={r.priority === 'Urgent' ? 'Critical' : r.priority}
+                      style={{ background: PRIORITY_STYLE[r.priority === 'Urgent' ? 'Critical' : r.priority]?.dot || '#94A3B8' }} />
+                    <Link to={r.path} className="font-semibold hover:underline" style={{ color: '#2563EB' }}>{r.ticket_number}</Link>
+                  </td>
+                  <td className="truncate max-w-[140px]">{r.account_name || '—'}</td>
+                  <td className="text-[11.5px] leading-tight">{r.level_name}</td>
                 </tr>
               ))}
             </tbody>
@@ -283,7 +286,7 @@ function Escalations({ e }) {
 function Bars({ items, labelKey, valueKey = 'count', color, suffix, max }) {
   const m = max || Math.max(1, ...items.map((i) => i[valueKey]));
   return (
-    <ul className="space-y-1">
+    <ul className="flex-1 flex flex-col justify-around gap-1">
       {items.map((i, idx) => (
         <li key={i[labelKey]}>
           <Link to={ticketsHref(i.params)} className="dash-link grid grid-cols-[88px_1fr_44px] items-center gap-2 px-1 py-1 text-[12px]" aria-label={`${i[labelKey]}: ${i[valueKey]}`}>
@@ -309,12 +312,12 @@ function DonutCard({ title, subtitle, items, labelKey, center, colorOf, navigate
   const total = data.reduce((s, d) => s + d.value, 0);
   return (
     <Card title={title} subtitle={subtitle}>
-      <div className="flex items-center gap-4 flex-wrap">
+      <div className="flex flex-col sm:flex-row xl:flex-col items-center gap-3">
         <Suspense fallback={<Fallback h={140} />}>
           <Donut data={data} total={total} centerLabel={center} size={140}
             onSelect={(d) => navigate(ticketsHref(d.params))} onSelectAll={() => navigate(ticketsHref(allParams))} />
         </Suspense>
-        <ul className="flex-1 min-w-[130px] space-y-0.5">
+        <ul className="flex-1 w-full min-w-[130px] space-y-0.5">
           {data.map((d) => (
             <li key={d.label}>
               <Link to={ticketsHref(d.params)} className="dash-link flex items-center justify-between px-1.5 py-1 text-[12.5px]">
@@ -523,23 +526,25 @@ export default function CommandCenter() {
         <Kpi label="CSAT" value={k.csat.avg == null ? '—' : `${k.csat.avg} / 5`} sub={`${k.csat.count} ratings · ${periodWord}`} icon={Star} tone="emerald" params={k.csat.params} />
       </div>
 
-      {/* Row: pipeline, SLA, queue, escalations */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <div className="xl:col-span-4 space-y-4">
+      {/* Row 1: SLA performance beside pipeline + queue + escalations. Every
+          row is a stretch grid, so the cards in it share one height. */}
+      <div className="sd-row grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div className="xl:col-span-5"><SlaPerformance sla={data.sla_performance} navigate={navigate} /></div>
+        <div className="xl:col-span-7 flex flex-col gap-4">
           <Pipeline stages={data.pipeline} rangeLabel={data.range_label} />
-          {isAgent && <MyQueue q={data.my_queue} />}
+          <div className="sd-row grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
+            <div><MyQueue q={data.my_queue} /></div>
+            <div><Escalations e={data.escalations} /></div>
+          </div>
         </div>
-        <div className="xl:col-span-4"><SlaPerformance sla={data.sla_performance} navigate={navigate} /></div>
-        {!isAgent && <div className="xl:col-span-2"><MyQueue q={data.my_queue} /></div>}
-        <div className={isAgent ? 'xl:col-span-4' : 'xl:col-span-2'}><Escalations e={data.escalations} /></div>
       </div>
 
-      {/* Row: trend, priority, ageing, categories */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <div className="xl:col-span-4">
+      {/* Row 2: trend, priority, ageing */}
+      <div className="sd-row grid grid-cols-1 md:grid-cols-2 gap-4 xl:grid-cols-12">
+        <div className="md:col-span-2 xl:col-span-6">
           <Card title="Tickets Trend" subtitle={`Created, resolved, closed and reopened per ${data.trend_bucket} · ${data.range_label}`}>
-            <Suspense fallback={<Fallback h={220} />}>
-              <TrendChart points={data.trend} onSelect={(p, key) => navigate(ticketsHref({ ...p.params, f: key }))} />
+            <Suspense fallback={<Fallback h={250} />}>
+              <TrendChart height={250} points={data.trend} onSelect={(p, key) => navigate(ticketsHref({ ...p.params, f: key }))} />
             </Suspense>
           </Card>
         </div>
@@ -552,19 +557,25 @@ export default function CommandCenter() {
             <Bars items={data.ageing} labelKey="label" color={(i, idx) => AGE_COLORS[idx]} />
           </Card>
         </div>
-        <div className="xl:col-span-2">
+      </div>
+
+      {/* Row 3: teams and agents (leads, managers, admins) */}
+      {!isAgent && (
+        <div className="sd-row grid grid-cols-1 gap-4 xl:grid-cols-12">
+          <div className="xl:col-span-5"><TeamPerformance rows={data.team_performance} /></div>
+          <div className="xl:col-span-7"><AgentWorkload rows={data.agent_workload} /></div>
+        </div>
+      )}
+
+      {/* Row 4: customers, categories, channels */}
+      <div className="sd-row grid grid-cols-1 md:grid-cols-2 gap-4 xl:grid-cols-12">
+        <div className="md:col-span-2 xl:col-span-6"><CustomersAttention rows={data.customers} /></div>
+        <div className="xl:col-span-3">
           <Card title="Top Issue Categories" subtitle={`Created · ${periodWord}`}>
             {data.categories.every((c) => !c.count) ? <Empty>No tickets.</Empty> : <Bars items={data.categories.filter((c) => c.count)} labelKey="category" color={(i, idx) => CAT_COLORS[idx % CAT_COLORS.length]} suffix />}
           </Card>
         </div>
-      </div>
-
-      {/* Row: teams, agents, customers, channels */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        {!isAgent && <div className="xl:col-span-3"><TeamPerformance rows={data.team_performance} /></div>}
-        {!isAgent && <div className="xl:col-span-3"><AgentWorkload rows={data.agent_workload} /></div>}
-        <div className={isAgent ? 'xl:col-span-8' : 'xl:col-span-4'}><CustomersAttention rows={data.customers} /></div>
-        <div className={isAgent ? 'xl:col-span-4' : 'xl:col-span-2'}>
+        <div className="xl:col-span-3">
           <DonutCard title="Channel Performance" subtitle={`Created · ${periodWord}`} items={data.channels} labelKey="source" center="Tickets"
             colorOf={(i, idx) => CH_COLORS[i.source] || CAT_COLORS[idx % CAT_COLORS.length]} navigate={navigate} allParams={{ ...k.open.params, f: 'created' }} />
         </div>

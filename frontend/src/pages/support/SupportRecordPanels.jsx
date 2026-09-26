@@ -46,22 +46,22 @@ export function TicketSupportPanel({ record, canEdit, onUpdated }) {
 
   return (
     <div className="mb-5 space-y-4">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="sd-row grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         <SlaCard d={d} record={record} canEdit={canEdit} onDone={refresh} />
         <CoverageCard coverage={d.coverage} record={record} />
         <ActionsCard d={d} record={record} canEdit={canEdit} closed={closed} onDone={refresh} />
       </div>
       {d.approval?.status === 'Pending' || record.status === 'Pending Approval' ? <ApprovalCard record={record} canEdit={canEdit} onDone={refresh} /> : null}
       {d.request && <RequestCard request={d.request} approval={d.approval} />}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
+      <div className="sd-row grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4 items-start">
         <Conversation record={record} canEdit={canEdit} onDone={refresh} />
-        <div className="space-y-4 min-w-0">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-4 items-start min-w-0">
           {closed && d.csat_enabled && <CsatCard d={d} record={record} canEdit={canEdit} onDone={refresh} />}
-          <KbSuggestions items={d.suggestions} />
           {d.escalations.length > 0 && <EscalationList items={d.escalations} />}
+          <KbSuggestions items={d.suggestions} />
+          <Timeline events={d.events} />
         </div>
       </div>
-      <Timeline events={d.events} />
     </div>
   );
 }
@@ -171,21 +171,25 @@ function ActionsCard({ d, record, canEdit, closed, onDone }) {
   const [reopen, setReopen] = useState(null);
   const a = useAction(() => { setEsc(null); setReopen(null); onDone(); });
   if (!canEdit) {
-    return <section className={box}><div className={h}><Wand2 className="w-4 h-4" /> Actions</div><p className="text-[12.5px]" style={{ color: 'var(--color-muted)' }}>You can view this ticket but not change it.</p></section>;
+    return <section className={`${box} md:col-span-2 xl:col-span-1`}><div className={h}><Wand2 className="w-4 h-4" /> Status &amp; actions</div><p className="text-[12.5px]" style={{ color: 'var(--color-muted)' }}>You can view this ticket but not change it.</p></section>;
   }
   return (
-    <section className={box} aria-label="Support actions">
-      <div className={h}><Wand2 className="w-4 h-4" /> Actions</div>
+    <section className={`${box} md:col-span-2 xl:col-span-1`} aria-label="Support actions">
+      <div className={h}><Wand2 className="w-4 h-4" /> Status &amp; actions</div>
       <div className="flex flex-wrap gap-2">
         {!closed && <button type="button" className="btn btn-secondary !py-1.5" disabled={a.busy} onClick={() => a.run(() => api.supportAutoAssign(record.id, { mode: 'least_loaded' }))}><Wand2 className="w-3.5 h-3.5" /> Auto-assign</button>}
         {!closed && <button type="button" className="btn btn-secondary !py-1.5" onClick={() => setEsc({ note: '' })}><Siren className="w-3.5 h-3.5" /> Escalate</button>}
         {closed && <button type="button" className="btn btn-secondary !py-1.5" onClick={() => setReopen({ reason: '' })}><RotateCcw className="w-3.5 h-3.5" /> Reopen</button>}
       </div>
-      <div className="text-[11.5px] mt-3 space-y-0.5" style={{ color: 'var(--color-muted)' }}>
-        {record.escalation_level ? <div>Escalation level: <b>L{record.escalation_level}</b></div> : null}
-        {d.reopened_count ? <div>Reopened {d.reopened_count}×</div> : null}
-        {record.first_response_at && <div>First response: {fmtDateTime(record.first_response_at)}</div>}
-      </div>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12px] mt-3">
+        {[
+          ['Type', record.ticket_type || 'Incident'], ['Source', record.source || '—'],
+          ['Created', fmtDateTime(record.created_at)], ['First response', record.first_response_at ? fmtDateTime(record.first_response_at) : 'Pending'],
+          ['Escalation', record.escalation_level ? `Level ${record.escalation_level}` : 'None'], ['Reopened', d.reopened_count ? `${d.reopened_count}×` : 'No'],
+        ].map(([k, v]) => (
+          <div key={k} className="min-w-0"><dt className="text-[10.5px] uppercase tracking-wide" style={{ color: 'var(--color-faint)' }}>{k}</dt><dd className="font-medium truncate">{v}</dd></div>
+        ))}
+      </dl>
       {esc && (
         <div className="mt-2 space-y-2 text-[12px]">
           <label className="block">Note for the team lead / manager<textarea className="input mt-0.5" rows={2} value={esc.note} onChange={(e) => setEsc({ note: e.target.value })} /></label>
@@ -362,7 +366,7 @@ function Timeline({ events }) {
     <section className={box} aria-label="Timeline">
       <div className={h}><History className="w-4 h-4" /> Timeline &amp; audit <span className="text-[11px] font-normal" style={{ color: 'var(--color-muted)' }}>({events.length})</span></div>
       {!events.length ? <p className="text-[12.5px]" style={{ color: 'var(--color-muted)' }}>No activity recorded yet.</p> : (
-        <ol className="relative border-l ml-1.5 space-y-2.5" style={{ borderColor: 'var(--color-line)' }}>
+        <ol className="relative border-l ml-1.5 space-y-2.5 max-h-[420px] overflow-y-auto thin-scroll" style={{ borderColor: 'var(--color-line)' }}>
           {shown.map((e) => (
             <li key={e.id} className="pl-4 relative text-[12.5px]">
               <span className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full" style={{ background: /breach|escalat/.test(e.event_type) ? '#F43F5E' : /warning/.test(e.event_type) ? '#F59E0B' : '#94A3B8' }} />
