@@ -239,7 +239,7 @@ export function EscalationsPage() {
                     <div className="text-[11.5px] truncate max-w-[240px]" style={{ color: 'var(--color-muted)' }}>{e.subject}</div></td>
                   <td>{e.account_name || '—'}</td>
                   <td><PriorityBadge priority={e.priority} /></td>
-                  <td className="whitespace-nowrap font-semibold">L{e.level} · {e.level_name}</td>
+                  <td className="whitespace-nowrap font-semibold"><CountLink value={`L${e.level} · ${e.level_name}`} params={{ f: 'escalated', level: e.level_name }} label={`All tickets escalated to ${e.level_name}`} /></td>
                   <td className="whitespace-nowrap">{e.metric === 'manual' ? 'Manual' : `${e.metric === 'response' ? 'First response' : 'Resolution'} ${e.pct}%`}</td>
                   <td className="max-w-[180px] truncate" title={e.recipients.join(', ')}>{e.recipients.join(', ') || '—'}</td>
                   <td>{e.owner || '—'}</td>
@@ -373,14 +373,14 @@ export function Customers() {
                   <td><span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: HEALTH[c.health][0], color: HEALTH[c.health][1] }}>{c.health}</span></td>
                   <td className="text-right"><CountLink value={c.open} params={c.open_params} /></td>
                   <td className="text-right"><CountLink value={c.breaches} params={c.breach_params} style={{ color: c.breaches ? '#BE123C' : undefined }} /></td>
-                  <td className="text-right">{c.missed}</td>
+                  <td className="text-right"><CountLink value={c.missed} params={c.missed_params} style={{ color: c.missed ? '#BE123C' : undefined }} /></td>
                   <td className="text-right"><CountLink value={c.total} params={{ f: 'all', account: String(c.id), view: c.open_params.view }} /></td>
-                  <td className="text-right">{c.csat ?? '—'}</td>
+                  <td className="text-right"><CountLink value={c.csat ?? '—'} params={c.csat_params} /></td>
                   <td>{c.subscription ? <Link to={`/records/subscriptions/${c.subscription.id}`} className="hover:underline">
                     <span style={{ color: c.coverage === 'covered' ? '#047857' : '#BE123C' }}>{c.coverage === 'covered' ? 'Active' : 'Expired'}</span> · {c.subscription.number}{c.subscription.plan ? ` (${c.subscription.plan})` : ''}
                     <div className="text-[11px]" style={{ color: 'var(--color-faint)' }}>Renews {c.subscription.renewal_date || c.subscription.end_date || '—'}</div></Link>
                     : <span style={{ color: 'var(--color-faint)' }}>No AMC</span>}</td>
-                  <td className="whitespace-nowrap">{relTime(c.last_ticket)}</td>
+                  <td className="whitespace-nowrap"><CountLink value={relTime(c.last_ticket)} params={c.all_params} label={`${c.account_name}: all tickets`} /></td>
                 </tr>))}</tbody>
             </table></div>
           )}
@@ -471,7 +471,11 @@ export function Reports() {
           {error ? <LoadError error={error} onRetry={load} /> : !data ? <Skeleton h={200} /> : data.rows.length === 0 ? <Empty>No data for this period.</Empty> : (
             <div className="overflow-x-auto"><table className="sd-table w-full">
               <thead><tr>{data.columns.map((c) => <th key={c.key} className={c.key === 'label' ? '' : 'text-right'}>{c.label}</th>)}</tr></thead>
-              <tbody>{data.rows.map((r, i) => <tr key={i}>{data.columns.map((c) => <td key={c.key} className={c.key === 'label' ? '' : 'text-right tabular-nums'}>{r[c.key] ?? '—'}</td>)}</tr>)}</tbody>
+              <tbody>{data.rows.map((r, i) => <tr key={i}>{data.columns.map((c) => (
+                <td key={c.key} className={c.key === 'label' ? '' : 'text-right tabular-nums'}>
+                  {c.key !== 'label' && r.links?.[c.key] ? <CountLink value={r[c.key] ?? '—'} params={r.links[c.key]} label={`${r.label} · ${c.label}`} /> : (r[c.key] ?? '—')}
+                </td>
+              ))}</tr>)}</tbody>
             </table></div>
           )}
         </Card>
@@ -502,8 +506,8 @@ export function Analytics() {
               {row('Tickets resolved', (x) => x.kpis.avg_resolution.count, undefined, (x) => x.kpis.avg_resolution.params)}
               {row('Reopened', (x) => x.trend.reduce((s, p) => s + p.reopened, 0), undefined, (x) => ({ ...x.kpis.open.params, f: 'reopened' }))}
               {row('SLA compliance', (x) => x.kpis.sla_compliance.pct, (v) => (v == null ? '—' : `${v}%`), (x) => x.kpis.sla_compliance.params)}
-              {row('Avg first response', (x) => x.kpis.avg_first_response.minutes, fmtDuration)}
-              {row('Avg resolution', (x) => x.kpis.avg_resolution.minutes, fmtDuration)}
+              {row('Avg first response', (x) => x.kpis.avg_first_response.minutes, fmtDuration, (x) => x.kpis.avg_first_response.params)}
+              {row('Avg resolution', (x) => x.kpis.avg_resolution.minutes, fmtDuration, (x) => x.kpis.avg_resolution.params)}
               {row('CSAT', (x) => x.kpis.csat.avg, (v) => (v == null ? '—' : `${v} / 5`), (x) => x.kpis.csat.params)}
             </tbody></table>
         </Card>
@@ -517,11 +521,11 @@ export function Analytics() {
         </Card>
         <Card title="Categories this month">
           <table className="sd-table w-full"><tbody>{m.categories.filter((c) => c.count).map((c) => (
-            <tr key={c.category}><td>{c.category}</td><td className="text-right"><CountLink value={c.count} params={c.params} /></td><td className="text-right" style={{ color: 'var(--color-muted)' }}>{c.pct}%</td></tr>))}</tbody></table>
+            <tr key={c.category}><td>{c.category}</td><td className="text-right"><CountLink value={c.count} params={c.params} /></td><td className="text-right"><CountLink value={`${c.pct}%`} params={c.params} style={{ color: 'var(--color-muted)' }} /></td></tr>))}</tbody></table>
         </Card>
         <Card title="Channels this month">
           <table className="sd-table w-full"><tbody>{m.channels.map((c) => (
-            <tr key={c.source}><td>{c.source}</td><td className="text-right"><CountLink value={c.count} params={c.params} /></td><td className="text-right" style={{ color: 'var(--color-muted)' }}>{c.pct}%</td></tr>))}</tbody></table>
+            <tr key={c.source}><td>{c.source}</td><td className="text-right"><CountLink value={c.count} params={c.params} /></td><td className="text-right"><CountLink value={`${c.pct}%`} params={c.params} style={{ color: 'var(--color-muted)' }} /></td></tr>))}</tbody></table>
         </Card>
       </div>
       <p className="text-[11.5px] mt-3" style={{ color: 'var(--color-faint)' }}>For custom periods and exports use <Link to="/support/reports" className="underline">Reports</Link>.</p>

@@ -344,8 +344,9 @@ function TeamPerformance({ rows }) {
               <td className="truncate max-w-[130px]">{t.name}</td>
               <td className="text-right"><CountLink value={t.open.count} params={t.open.params} /></td>
               <td className="text-right"><CountLink value={t.resolved.count} params={t.resolved.params} /></td>
-              <td className="text-right" style={{ color: t.sla_pct == null ? undefined : t.sla_pct >= 90 ? '#059669' : t.sla_pct >= 75 ? '#B45309' : '#BE123C' }}>{t.sla_pct == null ? '—' : `${t.sla_pct}%`}</td>
-              <td className="text-right">{t.csat ?? '—'}</td>
+              <td className="text-right"><CountLink value={t.sla_pct == null ? '—' : `${t.sla_pct}%`} params={t.sla_params} label={`${t.name} SLA: resolved tickets measured`}
+                style={{ color: t.sla_pct == null ? undefined : t.sla_pct >= 90 ? '#059669' : t.sla_pct >= 75 ? '#B45309' : '#BE123C' }} /></td>
+              <td className="text-right"><CountLink value={t.csat ?? '—'} params={t.csat_params} label={`${t.name} CSAT ratings`} /></td>
               <td className="text-right"><CountLink value={t.backlog} params={t.backlog_params} /></td>
             </tr>))}</tbody>
         </table></div>
@@ -367,8 +368,8 @@ function AgentWorkload({ rows }) {
               <td className="text-right"><CountLink value={a.at_risk.count} params={a.at_risk.params} style={{ color: a.at_risk.count ? '#B45309' : undefined }} /></td>
               <td className="text-right"><CountLink value={a.breached.count} params={a.breached.params} style={{ color: a.breached.count ? '#BE123C' : undefined }} /></td>
               <td className="text-right"><CountLink value={a.resolved.count} params={a.resolved.params} /></td>
-              <td className="text-right whitespace-nowrap">{fmtDuration(a.avg_response_min)}</td>
-              <td className="text-right whitespace-nowrap">{fmtDuration(a.avg_resolution_min)}</td>
+              <td className="text-right whitespace-nowrap"><CountLink value={fmtDuration(a.avg_response_min)} params={a.avg_response_params} label={`${a.name}: responded tickets`} /></td>
+              <td className="text-right whitespace-nowrap"><CountLink value={fmtDuration(a.avg_resolution_min)} params={a.avg_resolution_params} label={`${a.name}: resolved tickets`} /></td>
             </tr>))}</tbody>
         </table></div>
       )}
@@ -388,12 +389,16 @@ function CustomersAttention({ rows }) {
               <td className="truncate max-w-[130px]"><Link to={c.path} className="hover:underline">{c.name}</Link></td>
               <td className="text-right"><CountLink value={c.open.count} params={c.open.params} /></td>
               <td className="text-right"><CountLink value={c.breaches.count} params={c.breaches.params} style={{ color: c.breaches.count ? '#BE123C' : undefined }} /></td>
-              <td className="text-right">{c.csat ?? '—'}</td>
+              <td className="text-right"><CountLink value={c.csat ?? '—'} params={c.csat_params} label={`${c.name} CSAT ratings`} /></td>
               <td>{c.subscription_path
                 ? <Link to={c.subscription_path} className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full" style={c.coverage === 'covered' ? { background: '#ECFDF5', color: '#047857' } : { background: '#FFF1F2', color: '#BE123C' }}>{c.coverage === 'covered' ? 'Active' : 'Expired'}</Link>
                 : <span className="text-[11px]" style={{ color: 'var(--color-faint)' }}>None</span>}</td>
               <td className="text-right whitespace-nowrap" style={{ color: c.renewal_days != null && c.renewal_days < 0 ? '#BE123C' : undefined }}>
-                {c.renewal_days == null ? '—' : c.renewal_days < 0 ? `${-c.renewal_days}d ago` : `${c.renewal_days} days`}</td>
+                {c.renewal_days == null ? '—' : (
+                  <Link to={c.subscription_path} className="dash-link tabular-nums" style={{ color: 'inherit' }} aria-label={`${c.name} subscription renewal`}>
+                    {c.renewal_days < 0 ? `${-c.renewal_days}d ago` : `${c.renewal_days} days`}
+                  </Link>
+                )}</td>
             </tr>))}</tbody>
         </table></div>
       )}
@@ -431,11 +436,11 @@ function ConfigHealth({ c }) {
   return (
     <Card title="Service configuration" subtitle="Admin" action={<Link to="/support/settings" className="text-[12px] font-semibold" style={{ color: 'var(--color-brand)' }}>Open settings</Link>}>
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 text-[12px]">
-        {[['Active SLA policies', c.policies], ['Escalation rules', c.escalation_rules], ['Automation rules', c.automation_rules], ['Business calendars', c.calendars],
-          ['Assignment', String(c.assignment_mode || 'manual').replace('_', ' ')]].map(([l, v]) => (
-          <div key={l} className="rounded-lg px-3 py-2" style={{ background: 'var(--color-surface-soft)' }}>
+        {[['Active SLA policies', c.policies, 'sla'], ['Escalation rules', c.escalation_rules, 'escalation'], ['Automation rules', c.automation_rules, 'automation'],
+          ['Business calendars', c.calendars, 'hours'], ['Assignment', String(c.assignment_mode || 'manual').replace('_', ' '), 'general']].map(([l, v, tab]) => (
+          <Link key={l} to={`/support/settings?tab=${tab}`} className="dash-link rounded-lg px-3 py-2" style={{ background: 'var(--color-surface-soft)' }}>
             <div style={{ color: 'var(--color-muted)' }}>{l}</div><div className="font-bold text-[15px] capitalize" style={{ color: 'var(--color-ink)' }}>{v}</div>
-          </div>
+          </Link>
         ))}
         <Link to={ticketsHref(c.no_sla.params)} className="dash-link rounded-lg px-3 py-2" style={{ background: c.no_sla.count ? '#FFFBEB' : 'var(--color-surface-soft)' }}>
           <div style={{ color: 'var(--color-muted)' }}>Open without SLA</div><div className="font-bold text-[15px]" style={{ color: c.no_sla.count ? '#B45309' : 'var(--color-ink)' }}>{c.no_sla.count}</div>

@@ -161,6 +161,7 @@ const SETS = {
 };
 
 // Extra facets narrowing any set.
+const SLA_STATES = ['on_track', 'at_risk', 'breached', 'paused', 'met', 'missed'];
 function facetSql(p, args) {
   let sql = '';
   const labels = [];
@@ -192,8 +193,20 @@ function facetSql(p, args) {
     labels.push(['Channel', p.source === '__none' ? 'Not set' : p.source]);
   }
   if (p.account) {
-    sql += ' AND t.account_id = ?'; args.push(Number(p.account));
-    labels.push(['Customer', db.prepare('SELECT account_name n FROM accounts WHERE id=?').get(p.account)?.n || `#${p.account}`]);
+    if (p.account === 'none') { sql += ' AND t.account_id IS NULL'; labels.push(['Customer', 'No customer']); } else {
+      sql += ' AND t.account_id = ?'; args.push(Number(p.account));
+      labels.push(['Customer', db.prepare('SELECT account_name n FROM accounts WHERE id=?').get(p.account)?.n || `#${p.account}`]);
+    }
+  }
+  if (p.status) { sql += ' AND t.status = ?'; args.push(p.status); labels.push(['Status', p.status]); }
+  if (p.sla) {
+    const states = String(p.sla).split(',').filter((x) => SLA_STATES.includes(x));
+    if (states.length) { sql += ` AND t.sla_state IN (${states.map(() => '?').join(',')})`; args.push(...states); labels.push(['SLA', states.join(' or ')]); }
+  }
+  if (p.rating) {
+    if (p.rating === 'any') { sql += ' AND t.csat_rating IS NOT NULL'; labels.push(['CSAT', 'Rated']); } else {
+      sql += ' AND t.csat_rating = ?'; args.push(Number(p.rating)); labels.push(['CSAT', `${p.rating} / 5`]);
+    }
   }
   if (p.age && AGE[p.age]) {
     const a = AGE[p.age];
@@ -230,7 +243,7 @@ function ticketFilter(p, user) {
   return { where, args, labels, title: set.label };
 }
 
-const PARAMS = ['f', 'stage', 'priority', 'team', 'agent', 'category', 'source', 'account', 'age', 'level', 'range', 'from', 'to', 'view', 'critical_escalations'];
+const PARAMS = ['f', 'stage', 'priority', 'team', 'agent', 'category', 'source', 'account', 'status', 'sla', 'rating', 'age', 'level', 'range', 'from', 'to', 'view', 'critical_escalations'];
 
 // Registered into the dashboard drill-down registry (services/dashboardMetrics).
 const METRICS = {

@@ -196,7 +196,9 @@ router.get('/dashboard', requirePermission('support', 'view'), wrap((req) => {
       backlog: fig(P({ f: 'open', team: t.key, age: 'd1_3' }), user).count + fig(P({ f: 'open', team: t.key, age: 'd3_7' }), user).count + fig(P({ f: 'open', team: t.key, age: 'd7p' }), user).count,
       backlog_params: P({ f: 'open', team: t.key }),
       sla_pct: perf.pct ?? null,
+      sla_params: P({ f: 'sla_measured', team: t.key }),
       csat: teamCsat[t.key === 'none' ? 'null' : t.key] ?? null,
+      csat_params: P({ f: 'csat', team: t.key }),
     };
   }).filter((t) => t.open.count || t.resolved.count);
 
@@ -211,7 +213,9 @@ router.get('/dashboard', requirePermission('support', 'view'), wrap((req) => {
       breached: fig(P({ f: 'sla_breached', agent: String(id) }), user),
       resolved: fig(P({ f: 'resolved', agent: String(id) }), user),
       avg_response_min: a?.v != null ? Math.round(a.v) : null,
+      avg_response_params: P({ f: 'responded', agent: String(id) }),
       avg_resolution_min: r?.v != null ? Math.round(r.v) : null,
+      avg_resolution_params: P({ f: 'resolved', agent: String(id) }),
     };
   }).filter((a) => a.open.count || a.resolved.count).sort((a, b) => b.open.count - a.open.count).slice(0, 12);
 
@@ -219,7 +223,8 @@ router.get('/dashboard', requirePermission('support', 'view'), wrap((req) => {
   const custRows = rows(P({ f: 'open' }), "t.account_id k, COUNT(*) open, SUM(CASE WHEN t.sla_state='breached' THEN 1 ELSE 0 END) breaches", 'AND t.account_id IS NOT NULL GROUP BY t.account_id ORDER BY breaches DESC, open DESC LIMIT 8');
   const customers = custRows.map((c) => {
     const acc = db.prepare('SELECT account_name FROM accounts WHERE id=?').get(c.k);
-    const cs = db.prepare('SELECT AVG(csat_rating) v FROM tickets WHERE account_id=? AND csat_rating IS NOT NULL').get(c.k).v;
+    // CSAT for the same period and scope as the rest of the page.
+    const cs = one(P({ f: 'csat', account: String(c.k) }), 'AVG(t.csat_rating) v')?.v;
     const cov = sla.coverageFor({ account_id: c.k });
     const renewalDays = cov.subscription?.renewal_date ? Math.round((Date.parse(cov.subscription.renewal_date) - Date.parse(SM.today())) / 86400000) : null;
     return {
@@ -227,6 +232,7 @@ router.get('/dashboard', requirePermission('support', 'view'), wrap((req) => {
       open: { count: c.open, metric: 'support_tickets', path: '/records/tickets', params: P({ f: 'open', account: String(c.k) }) },
       breaches: { count: c.breaches, metric: 'support_tickets', path: '/records/tickets', params: P({ f: 'sla_breached', account: String(c.k) }) },
       csat: cs != null ? Math.round(cs * 10) / 10 : null,
+      csat_params: P({ f: 'csat', account: String(c.k) }),
       coverage: cov.status, subscription: cov.subscription, renewal_days: renewalDays,
       subscription_path: cov.subscription ? `/records/subscriptions/${cov.subscription.id}` : null,
     };
@@ -642,6 +648,8 @@ router.get('/customers', requirePermission('support', 'view'), wrap((req) => {
     return {
       ...r, csat: r.csat != null ? Math.round(r.csat * 10) / 10 : null, health, coverage: cov.status, subscription: cov.subscription,
       open_params: { view, f: 'open', account: String(r.id) }, breach_params: { view, f: 'sla_breached', account: String(r.id) },
+      missed_params: { view, f: 'all', account: String(r.id), sla: 'missed' }, csat_params: { view, f: 'all', account: String(r.id), rating: 'any' },
+      all_params: { view, f: 'all', account: String(r.id) },
     };
   });
 }));
@@ -661,11 +669,17 @@ router.get('/reports/:key', requirePermission('support', 'view'), wrap((req) => 
   if (!REPORTS[key]) throw notFound('Unknown report');
   const base = { range: req.query.range || 'month', from: req.query.from, to: req.query.to, view: SM.effectiveView(req.user, req.query.view) };
   const user = req.user;
+  // Each grouped row carries the ticket filter it was counted from (_p), so
+  // every cell in the report can open exactly those tickets.
+  const FACET = { 't.assigned_agent_id': ['agent', 'none'], 't.team_id': ['team', 'none'], 't.category': ['category', '__none'], 't.source': ['source', '__none'],
+    't.account_id': ['account', 'none'], 't.status': ['status', null], 't.priority': ['priority', null], 't.csat_rating': ['rating', null] };
   const grouped = (p, col, label, extra = '') => {
     const f = SM.ticketFilter(p, user);
+    const [fk, none] = FACET[col] || [];
     return db.prepare(`SELECT ${col} k, COUNT(*) c${extra} FROM tickets t WHERE ${f.where} GROUP BY k ORDER BY c DESC`).all(...f.args)
-      .map((r) => ({ ...r, label: label(r.k) }));
+      .map((r) => ({ ...r, label: label(r.k), _p: { ...p, ...(fk ? { [fk]: r.k == null || r.k === '' ? none : String(r.k) } : {}) } }));
   };
+  const cellSets = {}; // column key -> set override, per report
   const agentLabel = (k) => userName(k) || 'Unassigned';
   const teamLabel = (k) => (k ? db.prepare('SELECT name FROM teams WHERE id=?').get(k)?.name || `#${k}` : 'No team');
   const mins = (a, b) => minutesBetweenSql(a, b);
@@ -673,38 +687,53 @@ router.get('/reports/:key', requirePermission('support', 'view'), wrap((req) => 
   switch (key) {
     case 'volume':
       columns = [['label', 'Day'], ['created', 'Created'], ['resolved', 'Resolved'], ['closed', 'Closed'], ['reopened', 'Reopened']];
-      rows = (() => { const [a, b] = SM.rangeFor(base); const out = []; for (let d = a; d <= b; d = SM.addDays(d, 1)) { const pp = { ...base, range: 'custom', from: d, to: d }; out.push({ label: d, created: SM.count({ ...pp, f: 'created' }, user), resolved: SM.count({ ...pp, f: 'resolved' }, user), closed: SM.count({ ...pp, f: 'closed' }, user), reopened: SM.count({ ...pp, f: 'reopened' }, user) }); } return out; })();
+      rows = (() => { const [a, b] = SM.rangeFor(base); const out = []; for (let d = a; d <= b; d = SM.addDays(d, 1)) { const pp = { ...base, range: 'custom', from: d, to: d }; out.push({ label: d, _p: pp, created: SM.count({ ...pp, f: 'created' }, user), resolved: SM.count({ ...pp, f: 'resolved' }, user), closed: SM.count({ ...pp, f: 'closed' }, user), reopened: SM.count({ ...pp, f: 'reopened' }, user) }); } return out; })();
+      Object.assign(cellSets, { created: 'created', resolved: 'resolved', closed: 'closed', reopened: 'reopened' });
       break;
     case 'backlog': columns = [['label', 'Status'], ['c', 'Open tickets']]; rows = grouped({ ...base, f: 'open' }, 't.status', (k) => k); break;
     case 'sla': columns = [['label', 'Priority'], ['c', 'Measured'], ['met', 'Met'], ['pct', 'Compliance %']];
-      rows = grouped({ ...base, f: 'sla_measured' }, 't.priority', (k) => k, ", SUM(CASE WHEN t.sla_state='met' THEN 1 ELSE 0 END) met").map((r) => ({ ...r, pct: r.c ? Math.round((r.met / r.c) * 1000) / 10 : null })); break;
+      rows = grouped({ ...base, f: 'sla_measured' }, 't.priority', (k) => k, ", SUM(CASE WHEN t.sla_state='met' THEN 1 ELSE 0 END) met").map((r) => ({ ...r, pct: r.c ? Math.round((r.met / r.c) * 1000) / 10 : null }));
+      cellSets.met = 'sla_met'; break;
     case 'breaches': columns = [['label', 'Agent'], ['c', 'Open breached'], ]; rows = grouped({ ...base, f: 'sla_breached' }, 't.assigned_agent_id', agentLabel); break;
     case 'first_response': columns = [['label', 'Agent'], ['c', 'Responded'], ['avg', 'Avg minutes']];
       rows = grouped({ ...base, f: 'responded' }, 't.assigned_agent_id', agentLabel, `, ROUND(AVG(${mins('t.created_at', 't.first_response_at')})) avg`); break;
     case 'resolution': columns = [['label', 'Agent'], ['c', 'Resolved'], ['avg', 'Avg hours']];
       rows = grouped({ ...base, f: 'resolved' }, 't.assigned_agent_id', agentLabel, `, ROUND(AVG(${mins('t.created_at', 't.resolved_at')}) / 60, 1) avg`); break;
     case 'ageing': columns = [['label', 'Age'], ['c', 'Open tickets']];
-      rows = Object.entries(SM.AGE).map(([k, a]) => ({ label: a.label, c: SM.count({ ...base, f: 'open', age: k }, user) })); break;
+      rows = Object.entries(SM.AGE).map(([k, a]) => ({ label: a.label, _p: { ...base, f: 'open', age: k }, c: SM.count({ ...base, f: 'open', age: k }, user) })); break;
     case 'agents': columns = [['label', 'Agent'], ['c', 'Resolved'], ['met', 'SLA met'], ['csat', 'CSAT']];
-      rows = grouped({ ...base, f: 'resolved' }, 't.assigned_agent_id', agentLabel, ", SUM(CASE WHEN t.sla_state='met' THEN 1 ELSE 0 END) met, ROUND(AVG(t.csat_rating),1) csat"); break;
+      rows = grouped({ ...base, f: 'resolved' }, 't.assigned_agent_id', agentLabel, ", SUM(CASE WHEN t.sla_state='met' THEN 1 ELSE 0 END) met, ROUND(AVG(t.csat_rating),1) csat");
+      Object.assign(cellSets, { met: { sla: 'met' }, csat: { rating: 'any' } }); break;
     case 'teams': columns = [['label', 'Team'], ['c', 'Resolved'], ['met', 'SLA met'], ['csat', 'CSAT']];
-      rows = grouped({ ...base, f: 'resolved' }, 't.team_id', teamLabel, ", SUM(CASE WHEN t.sla_state='met' THEN 1 ELSE 0 END) met, ROUND(AVG(t.csat_rating),1) csat"); break;
+      rows = grouped({ ...base, f: 'resolved' }, 't.team_id', teamLabel, ", SUM(CASE WHEN t.sla_state='met' THEN 1 ELSE 0 END) met, ROUND(AVG(t.csat_rating),1) csat");
+      Object.assign(cellSets, { met: { sla: 'met' }, csat: { rating: 'any' } }); break;
     case 'csat': columns = [['label', 'Rating'], ['c', 'Responses']]; rows = grouped({ ...base, f: 'csat' }, 't.csat_rating', (k) => `${k} / 5`); break;
     case 'reopened': columns = [['label', 'Category'], ['c', 'Reopened']]; rows = grouped({ ...base, f: 'reopened' }, 't.category', (k) => k || 'Not set'); break;
     case 'categories': columns = [['label', 'Category'], ['c', 'Created']]; rows = grouped({ ...base, f: 'created' }, 't.category', (k) => k || 'Not set'); break;
     case 'channels': columns = [['label', 'Channel'], ['c', 'Created']]; rows = grouped({ ...base, f: 'created' }, 't.source', (k) => k || 'Not set'); break;
     case 'customers': columns = [['label', 'Customer'], ['c', 'Tickets'], ['breached', 'Breached'], ['csat', 'CSAT']];
-      rows = grouped({ ...base, f: 'created' }, 't.account_id', (k) => (k ? db.prepare('SELECT account_name n FROM accounts WHERE id=?').get(k)?.n : 'No customer'), ", SUM(CASE WHEN t.sla_state IN ('breached','missed') THEN 1 ELSE 0 END) breached, ROUND(AVG(t.csat_rating),1) csat"); break;
+      rows = grouped({ ...base, f: 'created' }, 't.account_id', (k) => (k ? db.prepare('SELECT account_name n FROM accounts WHERE id=?').get(k)?.n : 'No customer'), ", SUM(CASE WHEN t.sla_state IN ('breached','missed') THEN 1 ELSE 0 END) breached, ROUND(AVG(t.csat_rating),1) csat");
+      Object.assign(cellSets, { breached: { sla: 'breached,missed' }, csat: { rating: 'any' } }); break;
     case 'recurring': {
       columns = [['label', 'Customer · category'], ['c', 'Tickets in period']];
       const f = SM.ticketFilter({ ...base, f: 'created' }, user);
       rows = db.prepare(`SELECT t.account_id, COALESCE(t.category,'Not set') cat, COUNT(*) c FROM tickets t WHERE ${f.where}
         GROUP BY t.account_id, cat HAVING COUNT(*) >= 3 ORDER BY c DESC LIMIT 50`).all(...f.args)
-        .map((r) => ({ ...r, label: `${r.account_id ? db.prepare('SELECT account_name n FROM accounts WHERE id=?').get(r.account_id)?.n : 'No customer'} · ${r.cat}` }));
+        .map((r) => ({ ...r, label: `${r.account_id ? db.prepare('SELECT account_name n FROM accounts WHERE id=?').get(r.account_id)?.n : 'No customer'} · ${r.cat}`,
+          _p: { ...base, f: 'created', account: r.account_id ? String(r.account_id) : 'none', category: r.cat === 'Not set' ? '__none' : r.cat } }));
       break;
     }
     default: columns = []; rows = [];
   }
+  // links[col] = the ticket filter behind that cell.
+  const clean = (p) => Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+  rows = rows.map(({ _p, ...r }) => ({
+    ...r,
+    links: _p ? Object.fromEntries(columns.filter(([k]) => k !== 'label').map(([k]) => {
+      const o = cellSets[k];
+      return [k, clean(typeof o === 'string' ? { ..._p, f: o } : { ..._p, ...(o || {}) })];
+    })) : null,
+  }));
   return { key, title: REPORTS[key], range_label: SM.rangeLabel(base), columns: columns.map(([k, l]) => ({ key: k, label: l })), rows };
 }));
 

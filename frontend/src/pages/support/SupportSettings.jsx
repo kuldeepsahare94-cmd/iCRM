@@ -4,6 +4,7 @@
  * holiday re-applies SLA to open tickets on the server straight away.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Trash2, Save, FlaskConical, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { api } from '../../api';
 import { Card, PageTitle, Empty, LoadError, Skeleton, fmtDateTime, fmtDuration, loadSupportMeta, useSupportMeta } from './supportUi';
@@ -62,7 +63,9 @@ function useFlash() {
 
 // ---------------------------------------------------------------------------
 export default function SupportSettings() {
-  const [tab, setTab] = useState('general');
+  // ?tab= opens a tab directly (the Command Center's configuration tiles link here).
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState(() => (TABS.some(([k]) => k === params.get('tab')) ? params.get('tab') : 'general'));
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const { meta } = useSupportMeta();
